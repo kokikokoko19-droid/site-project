@@ -95,6 +95,7 @@ export async function ingestRanked(
   const now = opts.now ?? (() => new Date());
   const notify = opts.onProgress ?? (() => {});
   const seen = new Set<string>();
+  let cleared = false; // 最初のページが取れた時点で古い順位を消す（取得失敗時に順位を失わないため）
   for (let p = 0; p < opts.pages; p++) {
     const offset = 1 + p * hits;
     if (offset > MAX_OFFSET) {
@@ -103,6 +104,7 @@ export async function ingestRanked(
     }
     const page = await client.itemList({ sort: 'rank', hits, offset });
     const works = normalizeItems(page.items, { fetchedAt: now().toISOString() });
+    if (!cleared) { db.clearRankPositions(); cleared = true; }
     upsertInChunks(db, works);
     const entries: { contentId: string; rankPosition: number }[] = [];
     works.forEach((w, i) => {

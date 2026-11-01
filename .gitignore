@@ -7,3 +7,6 @@ data/cache/
 *.log
 .DS_Store
 .astro/
+data/*.sqlite
+data/*.sqlite-*
+data/export/

@@ -18,6 +18,7 @@ export type ListOptions = { status?: WorkStatus; limit?: number; offset?: number
 export type Db = {
   upsertWorks(works: Work[]): number; // 追加または更新して active に戻す。処理した件数を返す
   setRankPositions(entries: { contentId: string; rankPosition: number }[]): void;
+  clearRankPositions(): number; // 全作品の順位を消す（人気順の取り直し前に呼ぶ）
   markGone(activeIds: Iterable<string>, now: string): number; // activeIds にない active を gone にした件数
   purgeGone(olderThanDays: number, now: string): number; // gone から olderThanDays 日超の作品を関連行ごと消した件数
   getWork(contentId: string): Work | null;
@@ -103,6 +104,10 @@ export function openDb(path: string): Db {
 
     setRankPositions(entries) {
       tx(() => { for (const e of entries) setRank.run(e.rankPosition, e.contentId); });
+    },
+
+    clearRankPositions() {
+      return tx(() => Number(db.prepare('UPDATE works SET rank_position = NULL WHERE rank_position IS NOT NULL').run().changes));
     },
 
     markGone(activeIds, now) {

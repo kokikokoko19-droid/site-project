@@ -94,30 +94,31 @@ function similarFinder(works: Work[]): (i: number, n: number) => Similar[] {
   });
   const index = new Map<string, number[]>(); // キー → そのキーを持つ作品の添字
   feats.forEach((f, i) => f.keys.forEach((k) => { const l = index.get(k); if (l) l.push(i); else index.set(k, [i]); }));
-  const inter = new Int32Array(feats.length), flags = new Uint8Array(feats.length), seen = new Uint8Array(feats.length);
+  const len = feats.length, tbuf = new Int32Array(len), inter = new Int32Array(len), flags = new Uint8Array(len), seen = new Uint8Array(len);
   return (i, n) => {
-    const f = feats[i], top: Similar[] = [], touched: number[] = [];
+    const f = feats[i], top: Similar[] = [];
+    let nt = 0; // tbuf[0..nt) は共通のキーを持つ作品の添字
     if (n <= 0) return top;
     for (const k of f.keys) for (const j of index.get(k) as number[]) {
-      if (!seen[j]) { seen[j] = 1; touched.push(j); }
+      if (!seen[j]) { seen[j] = 1; tbuf[nt++] = j; }
       if (k[0] === 'g') inter[j]++; else flags[j] |= k[0] === 'a' ? 1 : k[0] === 's' ? 2 : 4;
     }
     const consider = (j: number): void => {
+      if (j === i) return; // 自分自身は除く
       const g = feats[j];
-      if (g.id === f.id) return; // 自分自身は除く
       const score = combine(inter[j], f.ng, g.ng, flags[j], f.t === null || g.t === null ? null : Math.abs(f.t - g.t));
       if (top.length < n || score >= top[n - 1].score) pushTop(top, { contentId: f.id, similarId: g.id, score }, n);
     };
-    for (const j of touched) consider(j);
-    if (top.length < n || top[n - 1].score <= 0) for (let j = 0; j < feats.length; j++) if (!seen[j]) consider(j);
-    for (const j of touched) { inter[j] = 0; flags[j] = 0; seen[j] = 0; }
+    for (let q = 0; q < nt; q++) consider(tbuf[q]);
+    if (top.length < n || top[n - 1].score <= 0) for (let j = 0; j < len; j++) if (!seen[j]) consider(j);
+    for (let q = 0; q < nt; q++) { const j = tbuf[q]; inter[j] = 0; flags[j] = 0; seen[j] = 0; }
     return top;
   };
 }
 
 /** 似た作品の上位 n 件（score 降順）。candidates に work 自身が含まれていても除く */
 export function computeSimilar(work: Work, candidates: Work[], n = 8): Similar[] {
-  return similarFinder([work, ...candidates])(0, n);
+  return similarFinder([work, ...candidates.filter((c) => c.contentId !== work.contentId)])(0, n);
 }
 
 /** 全作品の似た作品（全作品に computeSimilar を呼んだ場合と同じ結果を、転置インデックスで速く求める） */
