@@ -1,0 +1,20 @@
+/* デザイントークン（設計6章）。色は暗めの背景2段階＋文字3段階＋強調1色＋警告1色 */
+:root {
+  --bg0: #121316;            /* ページ背景 */
+  --bg1: #1b1d22;            /* カード・パネル */
+  --bg2: #24272e;            /* ホバー・入力欄 */
+  --fg0: #f2f2f0;            /* 見出し・本文 */
+  --fg1: #b9bcc3;            /* 補足 */
+  --fg2: #7f838c;            /* 弱い補足 */
+  --accent: #d9a441;         /* 強調（琥珀） */
+  --accent-ink: #1a1407;     /* 強調ボタンの文字 */
+  --warn: #e0574f;           /* 警告 */
+  --line: #30343c;           /* 境界線 */
+  --radius: 6px;
+  --sp: 8px;                 /* 余白の基準 */
+  --fs-h: 20px;              /* 見出し */
+  --fs-b: 15px;              /* 本文 */
+  --fs-s: 12.5px;            /* 補足 */
+  --font: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  --maxw: 1240px;
+}

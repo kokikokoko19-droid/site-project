@@ -1,0 +1,13 @@
+---
+// 広告用の空スロット。既定では非表示（common.css の .ad-slot が display: none）。
+// 枠を確認したいときは、Base の showAdSlots か <body class="show-ad-slots"> を使う。
+// いまは広告を配置しない。実際に置く前に、規約（docs/01_未確認事項.md）を確認すること。
+interface Props {
+  /** 場所の識別名（例: "top-bottom"）。差し替えや計測のときに使う */
+  name?: string;
+}
+
+const { name = 'default' } = Astro.props;
+---
+
+<div class="ad-slot" data-ad-slot={name} aria-hidden="true">広告スロット（空）</div>

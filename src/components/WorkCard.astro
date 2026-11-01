@@ -1,0 +1,81 @@
+---
+// 作品カード。見た目は mocks/ui.js の card() と同じ。
+// 画像は公式配信の直リンクをそのまま表示する。規約により加工は拡大縮小のみ（切り取りもしない）。
+// 型は表示に使う項目だけを持つ。データ層（src/data/）の型とつなぐのは呼び出し側で行う。
+interface WorkCardData {
+  /** 作品ID（content_id）。作品ページ /v/{id}/ のURLに使う */
+  id: string;
+  title: string;
+  /** 公式配信の小サイズ画像のURL（直リンク）。無ければ色の枠を出す */
+  imageSmall?: string;
+  /** 出演者名。無ければメーカー名を出す */
+  actresses?: string[];
+  maker?: string;
+  /** 自動文の1行（データ駆動テンプレ）。無ければ出さない */
+  cardText?: string;
+  /** ルールラベル。先頭から最大3つ表示する */
+  labels?: string[];
+}
+
+interface Props {
+  work: WorkCardData;
+  /** 作品ページ以外へ飛ばしたいときだけ指定する */
+  href?: string;
+}
+
+const { work, href = `/v/${work.id}/` } = Astro.props;
+
+const MAX_LABELS = 3;
+// 目立たせるラベル（モックと同じ）
+const HOT = new Set(['高評価', 'セール中', '初見向け']);
+
+const hasImage = Boolean(work.imageSmall);
+const meta = work.actresses?.length ? work.actresses.join('、') : work.maker;
+const labels = (work.labels ?? []).slice(0, MAX_LABELS);
+
+// 画像が無いときの色の枠。IDから色相を決める（モックの thumbStyle と同じ計算）
+const hash = (s: string) => {
+  let h = 0;
+  for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return h;
+};
+const hue = hash(work.id) % 360;
+const frame = `background: linear-gradient(145deg, hsl(${hue} 28% 30%), hsl(${(hue + 40) % 360} 24% 16%));`;
+---
+
+<a class="card" href={href}>
+  <div class:list={['thumb', { 'has-img': hasImage }]} style={hasImage ? undefined : frame}>
+    {/* タイトルは同じリンク内の文字で伝わるので、画像の代替テキストは空にする */}
+    {hasImage && <img src={work.imageSmall} alt="" loading="lazy" decoding="async" />}
+  </div>
+  <div class="card-body">
+    <div class="card-title">{work.title}</div>
+    {meta && <div class="card-meta">{meta}</div>}
+    {work.cardText && <div class="card-line">{work.cardText}</div>}
+    {
+      labels.length > 0 && (
+        <div class="labels">
+          {labels.map((l) => (
+            <span class:list={['label', { hot: HOT.has(l) }]}>{l}</span>
+          ))}
+        </div>
+      )
+    }
+  </div>
+</a>
+
+<style>
+  /* 画像あり。枠の比率（3:4）は固定し、画像は切り取らずに全体を収める */
+  .thumb.has-img {
+    position: relative;
+    padding: 0;
+    background: var(--bg2);
+  }
+  .thumb.has-img img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+</style>

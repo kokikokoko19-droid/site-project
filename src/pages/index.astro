@@ -1,0 +1,30 @@
+---
+// 仮のトップ。作品データの取り込みと探索UIができるまでの暫定の中身。
+// 本来の構成は docs/02_設計方針.md の 2.1（今日の発見、軸の入口、特集とハブ記事）と mocks/top.html。
+import Base from '../layouts/Base.astro';
+import AdSlot from '../components/AdSlot.astro';
+---
+
+<Base>
+  <section class="section">
+    <div class="editorial">
+      <div class="who">運営者から</div>
+      <!-- TODO: 運営者が記入（今週見たもの、気づいたこと、サイトの使い方を数行で） -->
+      <p>
+        （ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。
+        自動生成ではなく、人の声が最初に目に入るようにします。）
+      </p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="empty">
+      <h2>ただいま準備中です</h2>
+      <p class="muted">
+        作品データの取り込みが済み次第、「今日の発見」「軸から探す」「特集とガイド」「新着」「セール中」がここに並びます。
+      </p>
+    </div>
+  </section>
+
+  <AdSlot name="top-bottom" />
+</Base>

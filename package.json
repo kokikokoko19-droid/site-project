@@ -1,0 +1,20 @@
+{
+  "name": "site-project",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "test": "node --experimental-strip-types --test tests/",
+    "ingest": "node --experimental-strip-types src/data/cli.ts ingest",
+    "derive": "node --experimental-strip-types src/data/cli.ts derive",
+    "export": "node --experimental-strip-types src/data/cli.ts export"
+  },
+  "dependencies": {
+    "astro": "7.4.1"
+  }
+}

@@ -6,3 +6,4 @@ dist/
 data/cache/
 *.log
 .DS_Store
+.astro/

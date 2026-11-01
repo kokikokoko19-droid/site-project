@@ -1,0 +1,72 @@
+---
+// 法務ページ共通のレイアウト。Base の中に、読みやすい幅の本文枠を作る。
+// 本文の確定は運営者。確定したら、ページ側で draft={false} を渡して雛形の表示を消す。
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  description?: string;
+  /** 雛形のままの間は true。注意書きを表示して、未確定の文書が公開されるのを防ぐ */
+  draft?: boolean;
+}
+
+const { title, description, draft = true } = Astro.props;
+---
+
+<Base title={title} description={description}>
+  <article class="legal">
+    <div class="crumb"><a href="/">トップ</a> › {title}</div>
+    <h1>{title}</h1>
+    {draft && <p class="draft-note">この文書は雛形です。内容は運営者が確定します。</p>}
+    <slot />
+  </article>
+</Base>
+
+<style>
+  .legal {
+    display: grid;
+    gap: calc(var(--sp) * 2);
+    max-width: 760px;
+    margin-bottom: calc(var(--sp) * 6);
+  }
+  .crumb {
+    margin: 0;
+  }
+  .draft-note {
+    border: 1px dashed var(--warn);
+    border-radius: var(--radius);
+    color: var(--warn);
+    font-size: var(--fs-s);
+    padding: var(--sp) calc(var(--sp) * 1.5);
+  }
+
+  /* 本文はページ側から差し込まれるので、:global で当てる */
+  .legal :global(section) {
+    display: grid;
+    gap: calc(var(--sp) * 1.5);
+    margin-top: calc(var(--sp) * 2);
+  }
+  .legal :global(h2) {
+    font-size: 17px;
+    padding-bottom: var(--sp);
+    border-bottom: 1px solid var(--line);
+  }
+  .legal :global(p),
+  .legal :global(li),
+  .legal :global(dd) {
+    line-height: 1.9;
+    overflow-wrap: anywhere;
+  }
+  .legal :global(ul),
+  .legal :global(ol) {
+    margin: 0;
+    padding-left: 1.4em;
+  }
+  .legal :global(li + li) {
+    margin-top: 4px;
+  }
+  /* 固定ヘッダーに隠れないよう、見出しへのジャンプ位置を下げる */
+  .legal :global([id]) {
+    scroll-margin-top: calc(var(--sp) * 10);
+  }
+</style>

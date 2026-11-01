@@ -1,0 +1,141 @@
+---
+// 全ページ共通のレイアウト。ヘッダー、PR帯、フッター、年齢確認オーバーレイを持つ。
+// 見た目と振る舞いは mocks/ui.js の shell() に合わせている。
+import '../styles/tokens.css';
+import '../styles/common.css';
+import AdSlot from '../components/AdSlot.astro';
+
+interface Props {
+  /** ページ名。後ろにサイト名を付けて <title> にする。未指定ならサイト名のみ */
+  title?: string;
+  description?: string;
+  /** 作品データの最終更新日時（ISO 8601）。未指定の間は「準備中」と表示する */
+  dataUpdatedAt?: string;
+  /** 確認用。広告スロットの枠を表示する（既定は非表示） */
+  showAdSlots?: boolean;
+}
+
+const SITE_NAME = 'カタログ（仮）';
+const {
+  title,
+  description = '出演者・シリーズ・メーカー・ジャンルの軸から作品を見て回る、カタログ型のサイトです。',
+  dataUpdatedAt,
+  showAdSlots = false,
+} = Astro.props;
+
+const pageTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
+const { pathname } = Astro.url;
+
+// 軸メニュー。URL は docs/02_設計方針.md の 2.1 に合わせる。
+// 特集・ハブ記事（使い方）は一覧ページのURLが未定義のため、確定後に追加する。
+const nav = [
+  { href: '/', label: 'トップ' },
+  { href: '/explore/', label: '探索' },
+  { href: '/new/', label: '新着' },
+  { href: '/sale/', label: 'セール' },
+  { href: '/ranking/', label: 'ランキング' },
+];
+
+// データ更新日時を日本時間で整える。未指定や不正な値は null（表示は「準備中」）
+function formatUpdated(iso?: string) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const text = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(d);
+  return { text, iso: d.toISOString() };
+}
+const updated = formatUpdated(dataUpdatedAt);
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {/* 配色は暗い表示のみ（設計方針 6.2）。入力欄やスクロールバーも暗くする */}
+    <meta name="color-scheme" content="dark" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+  </head>
+  <body class:list={{ 'show-ad-slots': showAdSlots }}>
+    {/* 年齢確認。本文より先に置き、初回表示で本文が見えてしまうのを防ぐ */}
+    <div class="age-gate" id="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-title">
+      <div class="age-box">
+        <h2 id="age-title">年齢確認</h2>
+        <p class="muted">このサイトは成人向けの作品情報を扱います。あなたは18歳以上ですか。</p>
+        <div class="row">
+          <button class="btn btn-cta" id="age-yes" type="button">18歳以上です</button>
+          <button class="btn" id="age-no" type="button">18歳未満です</button>
+        </div>
+      </div>
+    </div>
+    <script is:inline>
+      (function () {
+        var gate = document.getElementById('age-gate');
+        var yes = document.getElementById('age-yes');
+        var ok = false;
+        try { ok = localStorage.getItem('age_ok') === '1'; } catch (e) {}
+        if (!ok) { gate.classList.add('open'); yes.focus(); }
+        yes.addEventListener('click', function () {
+          try { localStorage.setItem('age_ok', '1'); } catch (e) {}
+          gate.classList.remove('open');
+        });
+        document.getElementById('age-no').addEventListener('click', function () {
+          location.href = 'about:blank';
+        });
+      })();
+    </script>
+
+    <header class="site-header">
+      <div class="wrap">
+        <a class="logo" href="/">カタログ<span>（仮）</span></a>
+        {/* 探索ページ（/explore/）が q を読む。JS なしでも送信できる GET フォーム */}
+        <form class="search" action="/explore/" method="get" role="search">
+          <input name="q" type="search" placeholder="タイトル・出演者・シリーズ・メーカーで検索" aria-label="検索" />
+        </form>
+        <nav class="nav" aria-label="軸メニュー">
+          {nav.map((item) => (
+            <a href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</a>
+          ))}
+        </nav>
+      </div>
+    </header>
+    <div class="pr-band">
+      <div class="wrap"><b>PR</b>本サイトはFANZAアフィリエイトプログラムを利用しており、作品リンクはPRです。</div>
+    </div>
+
+    <main class="wrap" id="main"><slot /></main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="links">
+          <a href="/about/">運営者情報</a>
+          <a href="/terms/">利用規約</a>
+          <a href="/privacy/">プライバシーポリシー</a>
+          <a href="/removal/">掲載停止のご依頼</a>
+          <a href="/about/#contact">お問い合わせ</a>
+        </div>
+        {/* TODO: FANZA API のクレジット表記の文言は、運営者が規約を確認してから確定する（docs/01_未確認事項.md の3） */}
+        <p>
+          データ更新: {updated ? <time datetime={updated.iso}>{updated.text}</time> : '準備中'}
+          ／画像・動画はDMM.comの提供／18歳未満の方の閲覧はお断りします。
+        </p>
+        <div class="foot-ad"><AdSlot name="footer" /></div>
+      </div>
+    </footer>
+  </body>
+</html>
+
+<style>
+  .foot-ad {
+    margin-top: calc(var(--sp) * 2);
+  }
+</style>
