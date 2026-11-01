@@ -28,7 +28,7 @@ export function readURL(search) {
     if (v !== '') st.w[k] = clamp01(Number(v));
   }
   if (LENS.includes(u.get('len'))) st.len = u.get('len');
-  for (const k of ['act', 'ser', 'mak', 'q', 'sort']) st[k] = u.get(k) || '';
+  for (const k of ['act', 'ser', 'mak', 'q', 'sort']) st[k] = (u.get(k) || '').trim(); // 検索語は前後の空白を落とす
   for (const k of ['pmin', 'pmax', 'vmin', 'vmax', 'year']) st[k] = numStr(u.get(k));
   st.g = [...new Set(u.getAll('g'))];
   st.lab = [...new Set(u.getAll('lab'))];
