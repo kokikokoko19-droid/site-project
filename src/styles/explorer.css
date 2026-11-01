@@ -1,0 +1,33 @@
+/* 探索ページ専用のスタイル。基本の部品（.panel .chip .card .modal など）は common.css にある。 */
+
+/* 画像ありのカード。探索ページは WorkCard.astro を使わず JS でカードを描くので、
+   WorkCard.astro の is:global と同じ規則をここにも置く（枠は 3:4 のまま、画像は切り取らず全体を収める） */
+.thumb.has-img { position: relative; padding: 0; background: var(--bg2); }
+.thumb.has-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+
+/* モーダルの上段: 画像と仕様を横並びにする。スマホでは画像を小さく取り、仕様が画面の外に出ないようにする */
+.mx-top { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: calc(var(--sp) * 2); align-items: start; }
+@media (min-width: 640px) { .mx-top { grid-template-columns: 180px minmax(0, 1fr); } }
+
+/* モーダルのボタン2つ。スマホは縦、広い画面は横に並べる */
+.mx-actions { display: grid; gap: var(--sp); }
+@media (min-width: 640px) { .mx-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* 読み込みエラーの再試行ボタンを、文言から少し離す */
+.loading .btn { margin-left: var(--sp); }
+
+/* 広い画面では絞り込みパネルが画面に追従する（common.css の sticky）。項目を開いて画面より高くなると、
+   下の項目に届かなくなるので、パネルの高さを画面内に収めて、はみ出す分はパネルの中でスクロールさせる */
+@media (min-width: 960px) {
+  .panel { max-height: calc(100vh - 64px - var(--sp) * 2); max-height: calc(100dvh - 64px - var(--sp) * 2); overflow-y: auto; overscroll-behavior: contain; }
+}
+
+/* 入力部品がパネルの幅を超えて広がらないようにする。
+   数値入力は既定の幅が広く、2つ並べるとスマホ幅で右にはみ出す。選択肢の名前が長いときも、select が幅を押し広げる */
+.panel .body { grid-template-columns: minmax(0, 1fr); }
+.panel .field { min-width: 0; }
+.panel .field select, .panel .field input[type=number] { width: 100%; min-width: 0; }
+.panel .field .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+/* 該当なしの枠は hidden 属性で出し入れする。common.css の .empty { display: grid } に負けないようにする */
+.empty[hidden] { display: none; }

@@ -10,3 +10,6 @@ data/cache/
 data/*.sqlite
 data/*.sqlite-*
 data/export/
+
+# 探索ページ用に data/export からコピーしたもの（scripts/copy-export.mjs が作る）
+public/data/

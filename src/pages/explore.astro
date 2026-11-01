@@ -1,0 +1,166 @@
+---
+// 探索ページ（/explore/）。重み付けの並べ替え・絞り込み・検索・ランダムは、ブラウザ側の JS（public/explorer/）が行う。
+// マークアップは mocks/explorer.html に合わせている。ジャンルなどの選択肢はビルド時に index.json から埋める。
+// 作品データ（/data/*.json）は scripts/copy-export.mjs が data/export から public/data にコピーする（npm run build の前に自動実行）。
+import { readFileSync } from 'node:fs';
+import Base from '../layouts/Base.astro';
+import AdSlot from '../components/AdSlot.astro';
+import '../styles/explorer.css';
+
+interface ExportIndex {
+  generatedAt?: string;
+  genres?: unknown;
+  actresses?: unknown;
+  series?: unknown;
+  makers?: unknown;
+  labels?: unknown;
+  years?: unknown;
+}
+
+/**
+ * 選択肢の元になる index.json を読む。public/data/index.json は prebuild が years を足したもの。
+ * どちらも無い・壊れているときは、ビルドを止めずに空の選択肢で出す（データを入れてから build し直す）。
+ */
+function readIndex(): ExportIndex {
+  for (const path of ['public/data/index.json', 'data/export/index.json']) {
+    try {
+      return JSON.parse(readFileSync(path, 'utf8')) as ExportIndex;
+    } catch {
+      // 次の候補へ
+    }
+  }
+  return {};
+}
+const index = readIndex();
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+const genres = strings(index.genres);
+const actresses = strings(index.actresses);
+const series = strings(index.series);
+const makers = strings(index.makers);
+const labels = strings(index.labels);
+const years = (Array.isArray(index.years) ? index.years : []).filter((y): y is number => Number.isInteger(y));
+
+// 並べ替えの軸と長さの好み。public/explorer/explorer-core.js の AXES と同じ並び・既定値にする
+const axes = [
+  { k: 'e', name: '評価', def: 0.4 },
+  { k: 'r', name: '新しさ', def: 0.2 },
+  { k: 'p', name: '価格の安さ', def: 0.1 },
+  { k: 'l', name: '長さの好み', def: 0.1 },
+  { k: 'pop', name: '人気', def: 0.2 },
+];
+const lens = [['short', '短め'], ['mid', '標準'], ['long', '長め']];
+---
+
+<Base
+  title="探索"
+  description="評価・新しさ・価格・長さ・人気の重みを変えて並べ替え、ジャンルや出演者などで絞り込めます。条件はURLに残るので、そのまま共有できます。"
+  dataUpdatedAt={index.generatedAt}
+>
+  <div class="crumb"><a href="/">トップ</a> › 探索</div>
+  <div class="section-head"><h1>探索</h1><span class="muted">並べ替えの重みと絞り込みはURLに残ります</span></div>
+  <div class="explore">
+    <aside class="panel" id="panel" aria-label="並べ替えと絞り込み">
+      <details open>
+        <summary>並べ替えの重み</summary>
+        <div class="body" id="sliders">
+          {axes.map((a) => (
+            <label class="slider">
+              <span>{a.name}</span><b id={`v-${a.k}`}>{a.def.toFixed(2)}</b>
+              <input type="range" min="0" max="1" step="0.05" value={a.def} data-k={a.k} />
+            </label>
+          ))}
+          <div class="field" role="group" aria-label="長さの好み">
+            長さの好み
+            <div class="chips" id="len-chips">
+              {lens.map(([v, t]) => <button type="button" class="chip" data-len={v}>{t}</button>)}
+            </div>
+          </div>
+        </div>
+      </details>
+      <details open>
+        <summary>ジャンル（すべて含む）</summary>
+        <div class="body">
+          <div class="chips" id="genre-chips">
+            {genres.map((g) => <button type="button" class="chip" data-g={g} aria-pressed="false">{g}</button>)}
+          </div>
+        </div>
+      </details>
+      <details>
+        <summary>出演者・シリーズ・メーカー</summary>
+        <div class="body">
+          <label class="field">出演者
+            <select id="f-act"><option value="">指定なし</option>{actresses.map((v) => <option value={v}>{v}</option>)}</select>
+          </label>
+          <label class="field">シリーズ
+            <select id="f-ser"><option value="">指定なし</option>{series.map((v) => <option value={v}>{v}</option>)}</select>
+          </label>
+          <label class="field">メーカー
+            <select id="f-mak"><option value="">指定なし</option>{makers.map((v) => <option value={v}>{v}</option>)}</select>
+          </label>
+        </div>
+      </details>
+      <details>
+        <summary>価格・長さ・年</summary>
+        <div class="body">
+          <div class="field" role="group" aria-label="価格（円）">価格（円）
+            <div class="two">
+              <input type="number" id="f-pmin" placeholder="下限" aria-label="価格の下限" min="0" step="100" inputmode="numeric" />
+              <input type="number" id="f-pmax" placeholder="上限" aria-label="価格の上限" min="0" step="100" inputmode="numeric" />
+            </div>
+          </div>
+          <div class="field" role="group" aria-label="収録時間（分）">収録時間（分）
+            <div class="two">
+              <input type="number" id="f-vmin" placeholder="下限" aria-label="収録時間の下限" min="0" step="10" inputmode="numeric" />
+              <input type="number" id="f-vmax" placeholder="上限" aria-label="収録時間の上限" min="0" step="10" inputmode="numeric" />
+            </div>
+          </div>
+          <label class="field">配信開始年
+            <select id="f-year"><option value="">指定なし</option>{years.map((y) => <option value={String(y)}>{y}年</option>)}</select>
+          </label>
+        </div>
+      </details>
+      <details>
+        <summary>条件・ラベル</summary>
+        <div class="body">
+          <label class="check"><input type="checkbox" id="f-sale" />セール中のみ</label>
+          <label class="check"><input type="checkbox" id="f-sample" />サンプル動画あり</label>
+          <div class="chips" id="label-chips">
+            {labels.map((l) => <button type="button" class="chip" data-lab={l} aria-pressed="false">{l}</button>)}
+          </div>
+        </div>
+      </details>
+    </aside>
+    <section aria-label="検索結果">
+      <div class="toolbar">
+        <div class="count" aria-live="polite">該当 <b id="count">–</b> 件 <span id="query-note"></span></div>
+        <div class="row">
+          <button type="button" class="btn" id="btn-random">ランダムに1本</button>
+          <button type="button" class="btn" id="btn-reset">条件をクリア</button>
+        </div>
+      </div>
+      <AdSlot name="explore-top" />
+      <div id="results" class="grid"></div>
+      <noscript><p class="muted">探索はJavaScriptで動きます。有効にしてから開き直してください。</p></noscript>
+      <div id="empty" class="empty" hidden>
+        <div><b>条件に合う作品がありません。</b></div>
+        <div class="muted">条件を1つ外すと見つかるかもしれません。</div>
+        <div class="row" id="empty-actions"></div>
+      </div>
+      <div class="loading" id="more">読み込み中…</div>
+    </section>
+  </div>
+
+  {/* 作品の詳細モーダル。中身は explorer-ui.js が作品ごとに入れる */}
+  <div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modal-title"></h2>
+        <button type="button" class="icon-btn" id="modal-close" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  {/* public/ のファイルなので is:inline（Astro に処理させない）。explorer-ui.js が core と view を import する */}
+  <script is:inline type="module" src="/explorer/explorer-ui.js"></script>
+</Base>

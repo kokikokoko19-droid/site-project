@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "astro dev",
+    "prebuild": "node scripts/copy-export.mjs",
     "build": "astro build",
     "preview": "astro preview",
     "test": "node --experimental-strip-types --test \"tests/**/*.ts\"",
