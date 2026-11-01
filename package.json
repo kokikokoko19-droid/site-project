@@ -9,7 +9,7 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "test": "node --experimental-strip-types --test tests/",
+    "test": "node --experimental-strip-types --test \"tests/**/*.ts\"",
     "ingest": "node --experimental-strip-types src/data/cli.ts ingest",
     "derive": "node --experimental-strip-types src/data/cli.ts derive",
     "export": "node --experimental-strip-types src/data/cli.ts export"

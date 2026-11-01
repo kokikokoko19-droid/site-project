@@ -1,18 +1,21 @@
 ---
 // 作品カード。見た目は mocks/ui.js の card() と同じ。
 // 画像は公式配信の直リンクをそのまま表示する。規約により加工は拡大縮小のみ（切り取りもしない）。
-// 型は表示に使う項目だけを持つ。データ層（src/data/）の型とつなぐのは呼び出し側で行う。
+// 型は表示に使う項目だけを持つ（表示用の形）。データ層の型（src/data/types.ts）とは呼び出し側で対応づける。
+//   Work           → id: contentId, imageSmall, actresses: actresses.map(a => a.name), maker: makers[0]?.name
+//   WorkCardRecord → id, title: t, imageSmall: img, actresses: a, maker: m, labels: lb
+// labels には派生ラベル（新作・高評価など）を渡す。Work.labels はレーベル名で別物なので渡さない。
 interface WorkCardData {
   /** 作品ID（content_id）。作品ページ /v/{id}/ のURLに使う */
   id: string;
   title: string;
-  /** 公式配信の小サイズ画像のURL（直リンク）。無ければ色の枠を出す */
-  imageSmall?: string;
+  /** 公式配信の小サイズ画像のURL（直リンク）。無い（null）ときは色の枠を出す */
+  imageSmall?: string | null;
   /** 出演者名。無ければメーカー名を出す */
   actresses?: string[];
-  maker?: string;
+  maker?: string | null;
   /** 自動文の1行（データ駆動テンプレ）。無ければ出さない */
-  cardText?: string;
+  cardText?: string | null;
   /** ルールラベル。先頭から最大3つ表示する */
   labels?: string[];
 }
@@ -64,7 +67,9 @@ const frame = `background: linear-gradient(145deg, hsl(${hue} 28% 30%), hsl(${(h
   </div>
 </a>
 
-<style>
+<style is:global>
+  /* is:global にする理由: scoped だとカード1枚ごとに全要素へ属性が付き、1万ページ規模でHTMLが膨らむ。
+     クラス名（.thumb.has-img）はこの部品でしか使わないので衝突しない */
   /* 画像あり。枠の比率（3:4）は固定し、画像は切り取らずに全体を収める */
   .thumb.has-img {
     position: relative;

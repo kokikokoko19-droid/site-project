@@ -128,14 +128,9 @@ const updated = formatUpdated(dataUpdatedAt);
           データ更新: {updated ? <time datetime={updated.iso}>{updated.text}</time> : '準備中'}
           ／画像・動画はDMM.comの提供／18歳未満の方の閲覧はお断りします。
         </p>
-        <div class="foot-ad"><AdSlot name="footer" /></div>
+        {/* scoped な <style> は全要素に属性が付き、HTMLが膨らむので、モックと同じ inline style にする */}
+        <div style="margin-top: 16px"><AdSlot name="footer" /></div>
       </div>
     </footer>
   </body>
 </html>
-
-<style>
-  .foot-ad {
-    margin-top: calc(var(--sp) * 2);
-  }
-</style>
