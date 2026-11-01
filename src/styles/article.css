@@ -1,7 +1,7 @@
 /* ガイド記事・特集の本文スタイル。色と余白は tokens.css、共通部品（.crumb .lead .hub など）は common.css を使う。
    行の長さは --prose-w（65ch）。日本語の本文では全角35〜40字ほどの幅になる。変えるときはここだけを直す。 */
 
-.article { --prose-w: 65ch; max-width: var(--prose-w); margin: calc(var(--sp) * 2) auto calc(var(--sp) * 6); }
+.article { --prose-w: 65ch; max-width: var(--prose-w); margin: calc(var(--sp) * 2) 0 calc(var(--sp) * 6); } /* サイト全体が左揃いなので、本文の列も左に置く */
 
 /* 見出し部（種別・題名・日付） */
 .article-head { display: grid; gap: var(--sp); padding-bottom: calc(var(--sp) * 3); margin-bottom: calc(var(--sp) * 4); border-bottom: 1px solid var(--line); }
