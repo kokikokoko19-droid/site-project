@@ -1,0 +1,164 @@
+# X への自動投稿（設計方針 8.2）。
+# 毎日 日本時間 9:00・15:00・21:00 に 1 件ずつ、データから選んだ作品を投稿する。URL なしが基本。
+# 本投稿になるのは「X の secrets が 4 つ揃っている」かつ「実データの DB の cache を復元できた」ときだけ。
+# それ以外は --dry-run に切り替わり、本文をログに出すだけで投稿しない（記録も cache に残さない）。
+# 投稿履歴（重複排除と 1 日の上限に使う）は catalog.sqlite とは別のファイル data/x-history.sqlite に持ち、
+# 別の cache（x-history-v1-）で次回に引き継ぐ。日次更新（daily.yml）の DB の cache とは競合しない。
+name: X Post
+
+on:
+  schedule:
+    # 日本時間 9:00 / 15:00 / 21:00 = UTC 0:00 / 6:00 / 12:00。GitHub 側の混雑で数分から十数分遅れることがある。
+    - cron: '0 0 * * *'
+    - cron: '0 6 * * *'
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '投稿せずに本文だけを確認する（認証情報があっても投稿しない）'
+        type: boolean
+        required: false
+        default: false
+      kind:
+        description: '投稿の区分（sale は「セール中」の作品だけから選ぶ）'
+        type: choice
+        options: [daily, feature, sale]
+        required: false
+        default: daily
+      with_url:
+        description: 'URL 付きで投稿する（単価が高い。リポジトリ変数 SITE_URL が必要）'
+        type: boolean
+        required: false
+        default: false
+
+# 同時に 2 つ動かさない（同じ履歴に重ねて書かないため）。実行中のものは止めず、後から来たものを待たせる。
+concurrency:
+  group: x-post
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DB_PATH: data/catalog.sqlite
+  EXPORT_DIR: data/export
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Node.js を用意
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+
+      - name: 依存を入れる
+        run: npm ci
+
+      # secrets は step の if 条件で直接は使えないので、有無の判定だけをこのステップで行い、結果を出力に残す。
+      # secrets はこのステップと「X に投稿する」ステップにだけ渡す（npm ci などには渡さない）。
+      - name: X の認証情報の有無を確認
+        id: creds
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+        run: |
+          if [ -n "$X_API_KEY" ] && [ -n "$X_API_SECRET" ] && [ -n "$X_ACCESS_TOKEN" ] && [ -n "$X_ACCESS_TOKEN_SECRET" ]; then
+            echo "have_x=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have_x=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # カタログの DB は日次更新（daily.yml）が cache に残したものを、前方一致のいちばん新しいもので復元する。
+      - name: カタログの DB を cache から復元
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: data/catalog.sqlite
+          key: catalog-db-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            catalog-db-v1-
+
+      # cache には DB（SQLite）だけが入っていて、探索用の JSON（data/export）は無い。投稿は JSON を読むので、DB から書き出す。
+      - name: 探索用 JSON を書き出す（cache の DB から）
+        if: steps.restore.outputs.cache-matched-key != ''
+        run: npm run export
+
+      - name: 合成データで代替する（cache なし）
+        if: steps.restore.outputs.cache-matched-key == ''
+        run: |
+          echo "::warning title=合成データで代替::カタログの DB の cache が見つからないため、合成データ 300 件で代替します。これは実データの代わりで、この実行は dry-run になり、投稿しません。先に Daily ワークフローを実行して cache を作ってください。"
+          npm run ingest -- --synthetic 300 && npm run derive && npm run export
+
+      - name: 投稿の方式を決める
+        id: mode
+        env:
+          HAVE_X: ${{ steps.creds.outputs.have_x }}
+          CACHE_KEY: ${{ steps.restore.outputs.cache-matched-key }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+        run: |
+          reason=""
+          if [ -z "$CACHE_KEY" ]; then
+            reason="実データの DB の cache が無く、合成データで代替しているため"
+          elif [ "$HAVE_X" != "true" ]; then
+            reason="X の secrets（X_API_KEY、X_API_SECRET、X_ACCESS_TOKEN、X_ACCESS_TOKEN_SECRET）が 4 つ揃っていないため"
+          elif [ "$DRY_RUN_INPUT" = "true" ]; then
+            reason="手動実行で dry_run が指定されたため"
+          fi
+          if [ -n "$reason" ]; then
+            echo "dry_run=true" >> "$GITHUB_OUTPUT"
+            echo "::warning title=dry-run で実行::${reason}、投稿せずに本文の確認だけを行います。"
+            echo "X 投稿の方式: dry-run（投稿しない）。理由: ${reason}" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "dry_run=false" >> "$GITHUB_OUTPUT"
+            echo "X 投稿の方式: 本投稿" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # 履歴の cache は、キーを実行ごとに変えて前方一致の最新を復元する（同じキーでは上書きできないため。daily.yml と同じ作り）。
+      # 7 日アクセスがないと GitHub が cache を消すが、その場合は空の履歴から始まるだけ（重複排除が一度リセットされる）。
+      - name: 投稿履歴を cache から復元
+        uses: actions/cache/restore@v4
+        with:
+          path: data/x-history.sqlite
+          key: x-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            x-history-v1-
+
+      - name: X に投稿する
+        id: post
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          # URL 付きで投稿するときのサイトの URL と、1 日の投稿上限（未設定なら CLI の既定の 5）。リポジトリの変数で渡す。
+          SITE_URL: ${{ vars.SITE_URL }}
+          X_DAILY_MAX: ${{ vars.X_DAILY_MAX }}
+          # 投稿履歴は catalog.sqlite とは別のファイルに持つ（上の export などは workflow の DB_PATH を使う）
+          DB_PATH: data/x-history.sqlite
+          DRY_RUN: ${{ steps.mode.outputs.dry_run }}
+          KIND: ${{ inputs.kind || 'daily' }}
+          WITH_URL: ${{ inputs.with_url || 'false' }}
+        run: |
+          args=(--count 1 --kind "$KIND")
+          if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+          if [ "$WITH_URL" = "true" ]; then args+=(--with-url); fi
+          npm run x:post -- "${args[@]}"
+
+      # 本投稿のときだけ履歴を残す（dry-run や合成データの記録を、実際の履歴に混ぜない）。
+      # 投稿のステップが途中で失敗しても、投稿済みの分は残す（キャンセルされたときと、投稿のステップに届かなかったときは除く）。
+      - name: 投稿履歴を cache に保存
+        if: ${{ !cancelled() && steps.post.conclusion != 'skipped' && steps.mode.outputs.dry_run == 'false' }}
+        uses: actions/cache/save@v4
+        with:
+          path: data/x-history.sqlite
+          key: x-history-v1-${{ github.run_id }}-${{ github.run_attempt }}
