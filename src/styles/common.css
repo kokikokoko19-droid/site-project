@@ -150,3 +150,6 @@ body.show-ad-slots .ad-slot { display: flex; }
 .detail, .stack, .modal-body, .detail > div { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 960px) { .detail { grid-template-columns: 320px minmax(0, 1fr); } }
 .stack { display: grid; gap: calc(var(--sp) * 3); }
+
+/* hidden 属性を display 指定より優先する（空状態の枠が常時表示される不具合の修正） */
+[hidden] { display: none !important; }
