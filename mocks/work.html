@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>作品 | カタログ（モック）</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<main class="wrap" id="main"></main>
+<script src="data.js"></script>
+<script src="ui.js"></script>
+<script>
+(function () {
+  const M = window.MOCK, UI = window.UI;
+  UI.shell('work');
+  const id = new URLSearchParams(location.search).get('id');
+  const w = M.byId[id] || M.works[0];
+  document.title = w.title + ' | カタログ（モック）';
+  document.getElementById('main').innerHTML = `
+    <div class="crumb"><a href="top.html">トップ</a> › <a href="explorer.html">探索</a> › ${UI.esc(w.maker)} › ${UI.esc(w.title)}</div>
+    <div class="section-head"><h1>${UI.esc(w.title)}</h1><span class="muted">${UI.esc(w.actresses.join('、') || w.maker)}</span></div>
+    <div class="stack">${UI.detail(w, { pageLink: false })}</div>`;
+})();
+</script>
+</body>
+</html>

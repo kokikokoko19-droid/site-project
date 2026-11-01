@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>探索 | カタログ（モック）</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<main class="wrap">
+  <div class="crumb"><a href="top.html">トップ</a> › 探索</div>
+  <div class="section-head"><h1>探索</h1><span class="muted">並べ替えの重みと絞り込みはURLに残ります</span></div>
+  <div class="explore">
+    <aside class="panel" id="panel">
+      <details open>
+        <summary>並べ替えの重み</summary>
+        <div class="body" id="sliders"></div>
+      </details>
+      <details open>
+        <summary>ジャンル（すべて含む）</summary>
+        <div class="body"><div class="chips" id="genre-chips"></div></div>
+      </details>
+      <details>
+        <summary>出演者・シリーズ・メーカー</summary>
+        <div class="body">
+          <label class="field">出演者<select id="f-act"><option value="">指定なし</option></select></label>
+          <label class="field">シリーズ<select id="f-ser"><option value="">指定なし</option></select></label>
+          <label class="field">メーカー<select id="f-mak"><option value="">指定なし</option></select></label>
+        </div>
+      </details>
+      <details>
+        <summary>価格・長さ・年</summary>
+        <div class="body">
+          <div class="field">価格（円）<div class="two"><input type="number" id="f-pmin" placeholder="下限" min="0" step="100"><input type="number" id="f-pmax" placeholder="上限" min="0" step="100"></div></div>
+          <div class="field">収録時間（分）<div class="two"><input type="number" id="f-vmin" placeholder="下限" min="0" step="10"><input type="number" id="f-vmax" placeholder="上限" min="0" step="10"></div></div>
+          <label class="field">配信開始年<select id="f-year"><option value="">指定なし</option></select></label>
+        </div>
+      </details>
+      <details>
+        <summary>条件・ラベル</summary>
+        <div class="body">
+          <label class="check"><input type="checkbox" id="f-sale">セール中のみ</label>
+          <label class="check"><input type="checkbox" id="f-sample">サンプル動画あり</label>
+          <div class="chips" id="label-chips"></div>
+        </div>
+      </details>
+    </aside>
+    <section>
+      <div class="toolbar">
+        <div class="count">該当 <b id="count">0</b> 件 <span id="query-note"></span></div>
+        <div class="row">
+          <button class="btn" id="btn-random">ランダムに1本</button>
+          <button class="btn" id="btn-reset">条件をクリア</button>
+        </div>
+      </div>
+      <div class="ad-slot">広告スロット（空）</div>
+      <div id="results" class="grid"></div>
+      <div id="empty" class="empty" hidden>
+        <div><b>条件に合う作品がありません。</b></div>
+        <div class="muted">条件を1つ外すと見つかるかもしれません。</div>
+        <div class="row" id="empty-actions"></div>
+      </div>
+      <div class="loading" id="more"></div>
+    </section>
+  </div>
+</main>
+<script src="data.js"></script>
+<script src="ui.js"></script>
+<script src="explorer.js"></script>
+</body>
+</html>
