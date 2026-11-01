@@ -7,7 +7,6 @@ import { buildCatalog } from '../src/lib/catalog.ts';
 import type { CatalogWork } from '../src/lib/catalog.ts';
 import { main } from '../src/x/cli.ts';
 import { XApiError, createXClient, redactSecrets } from '../src/x/client.ts';
-import type { XClientOptions } from '../src/x/client.ts';
 import { buildAuthorizationHeader } from '../src/x/oauth.ts';
 import { openPostStore } from '../src/x/store.ts';
 
@@ -26,7 +25,7 @@ function fakeFetch(replies: Reply[]) {
   return { impl, calls };
 }
 /** 偽の fetch と、待ち時間を記録する sleep を付けたクライアント */
-function setup(replies: Reply[], over: Partial<XClientOptions> = {}) {
+function setup(replies: Reply[], over: Partial<Parameters<typeof createXClient>[0]> = {}) {
   const f = fakeFetch(replies), sleeps: number[] = [];
   const client = createXClient({ ...CREDS, fetchImpl: f.impl, sleep: async (ms) => { sleeps.push(ms); }, ...over });
   return { client, calls: f.calls, sleeps };
@@ -138,8 +137,7 @@ describe('dryRun と認証情報の検査', () => {
 });
 
 describe('CLI（post）', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'x-cli-'));
-  after(() => rmSync(dir, { recursive: true, force: true }));
+  const dir = mkdtempSync(join(tmpdir(), 'x-cli-')); after(() => rmSync(dir, { recursive: true, force: true })); // 履歴 DB の置き場
   const NOW = new Date('2026-11-01T03:00:00Z'), DAY = '2026-11-01'; // 日本時間 12:00
   const KEYS = { X_API_KEY: CREDS.consumerKey, X_API_SECRET: CREDS.consumerSecret, X_ACCESS_TOKEN: CREDS.accessToken, X_ACCESS_TOKEN_SECRET: CREDS.accessTokenSecret };
   const work = (id: string, label: string): CatalogWork => ({
