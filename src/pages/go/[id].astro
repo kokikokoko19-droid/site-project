@@ -39,6 +39,7 @@ const { url } = Astro.props;
     <p><small>自動で移動しない場合は、<a href={url} rel="sponsored nofollow">こちら</a>から進んでください。</small></p>
     {/* 計測を入れる場合は、移動の直前（replace の前）に送る */}
     <script is:inline define:vars={{ url }}>
+      if (typeof window.gtag === 'function') window.gtag('event', 'outbound', { content_id: document.body.dataset.go, transport_type: 'beacon' });
       window.location.replace(url);
     </script>
   </body>

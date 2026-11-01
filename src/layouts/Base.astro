@@ -83,6 +83,18 @@ function formatUpdated(iso?: string) {
   return { text, iso: d.toISOString() };
 }
 const updated = formatUpdated(dataUpdatedAt);
+
+// 計測（GA4）。PUBLIC_GA4_ID が設定されているときだけ、gtag.js の読み込みと設定を出す。
+// 未設定（合成データ・開発時）や、G- で始まる形式でない値のときは何も出さない。
+// 広告向けの機能は使わない（docs/02_設計方針.md の10章）。イベントの送信は public/analytics/events.js が行う。
+const rawGa4Id = import.meta.env.PUBLIC_GA4_ID;
+const ga4Id = typeof rawGa4Id === 'string' && /^G-[A-Za-z0-9]{4,20}$/.test(rawGa4Id.trim()) ? rawGa4Id.trim() : undefined;
+const ga4Snippet = ga4Id
+  ? `window.dataLayer = window.dataLayer || [];
+function gtag() { dataLayer.push(arguments); }
+gtag('js', new Date());
+gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_signals: false, allow_ad_personalization_signals: false });`
+  : '';
 ---
 
 <!doctype html>
@@ -106,6 +118,10 @@ const updated = formatUpdated(dataUpdatedAt);
     <meta property="og:site_name" content={SITE_NAME} />
     {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
     <meta name="twitter:card" content="summary_large_image" />
+    {/* 計測（GA4）。PUBLIC_GA4_ID があるときだけ出す。イベントの送信は /analytics/events.js（gtag が無ければ記録するだけ） */}
+    {ga4Id && <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}></script>}
+    {ga4Id && <script is:inline set:html={ga4Snippet} />}
+    <script is:inline defer src="/analytics/events.js"></script>
     {/* ページごとの JSON-LD などは、ここに slot="head" で差し込む */}
     <slot name="head" />
   </head>
