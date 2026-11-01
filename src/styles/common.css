@@ -153,3 +153,44 @@ body.show-ad-slots .ad-slot { display: flex; }
 
 /* hidden 属性を display 指定より優先する（空状態の枠が常時表示される不具合の修正） */
 [hidden] { display: none !important; }
+
+/* ---- モバイルメニュー（幅960px未満。components/MobileNav.astro） ----
+   details/summary だけで開閉する。パネルは sticky のヘッダーを基準に、すぐ下へ重ねて表示する。
+   .site-header .wrap は子孫すべてに効くため、パネルの中では .wrap を使わない。 */
+.mnav { flex: none; }
+.mnav-btn {
+  list-style: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  min-width: 52px; min-height: 44px; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg2); color: var(--fg0);
+  font-size: 11px; line-height: 1; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.mnav-btn::-webkit-details-marker { display: none; }
+.mnav-btn::marker { content: ''; }
+.mnav-btn:hover, .mnav[open] .mnav-btn { border-color: var(--fg2); }
+.mnav-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 線3本の絵。上下の線は疑似要素、真ん中は背景で描く。開いている間は × にする */
+.mnav-icon { position: relative; display: block; width: 18px; height: 14px; background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat; }
+.mnav-icon::before, .mnav-icon::after { content: ''; position: absolute; left: 0; width: 18px; height: 2px; border-radius: 1px; background: currentColor; transition: transform .15s, top .15s, bottom .15s; }
+.mnav-icon::before { top: 0; }
+.mnav-icon::after { bottom: 0; }
+.mnav[open] .mnav-icon { background-size: 0 0; }
+.mnav[open] .mnav-icon::before { top: 6px; transform: rotate(45deg); }
+.mnav[open] .mnav-icon::after { bottom: 6px; transform: rotate(-45deg); }
+.mnav-panel {
+  position: absolute; top: calc(100% + 1px); left: 0; right: 0;
+  max-height: calc(100vh - 60px); max-height: calc(100dvh - 60px); overflow-y: auto; overscroll-behavior: contain;
+  background: rgb(18,19,22); border-bottom: 1px solid var(--line); box-shadow: 0 12px 24px rgba(0,0,0,.45);
+}
+.mnav-panel ul { list-style: none; margin: 0; padding: 0; }
+.mnav-panel a { display: flex; align-items: center; min-height: 48px; padding: 0 calc(var(--sp) * 2); border-top: 1px solid var(--line); color: var(--fg0); }
+.mnav-panel li:first-child a { border-top: 0; }
+.mnav-panel a:hover, .mnav-panel a:focus-visible { background: var(--bg2); }
+.mnav-panel a[aria-current="page"] { color: var(--accent); font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .mnav-icon::before, .mnav-icon::after { transition: none; } }
+/* PC では従来の .nav を使うので、モバイルメニューは隠す */
+@media (min-width: 960px) { .mnav { display: none; } }
+
+/* ---- 404 ページ（pages/404.astro） ---- */
+.notfound { display: grid; justify-items: start; gap: calc(var(--sp) * 3); padding: calc(var(--sp) * 6) 0; }
+.notfound .search { width: 100%; max-width: 520px; gap: var(--sp); }
+.notfound .search .btn { flex: none; white-space: nowrap; }

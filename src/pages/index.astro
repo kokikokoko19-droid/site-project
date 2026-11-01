@@ -3,6 +3,8 @@
 // 運営者から／今日の発見／軸から探す／特集とガイド／新着／セール中
 import Base from '../layouts/Base.astro';
 import AdSlot from '../components/AdSlot.astro';
+import { getCollection } from 'astro:content';
+import ArticleCard from '../components/ArticleCard.astro';
 import WorkGrid from '../components/WorkGrid.astro';
 import { loadCatalog } from '../lib/catalog.ts';
 
@@ -30,18 +32,25 @@ const axes = [
     .map(([id, works]) => ({ id, name: a.names.get(id) ?? id, count: works.length })),
 }));
 
-// 特集とガイドは運営者が書く。ページができるまでは仮文で、リンク先は /guide/ 配下の予定
-const features = [
+// 特集とガイドは運営者が書く（src/content/）。最新の特集2件・ガイド3件を出す。
+// 本番ビルド（import.meta.env.PROD）では draft を除き、開発時は下書きも出す（「下書き」バッジ付き）
+const visible = ({ data }: { data: { draft: boolean } }) => !import.meta.env.PROD || !data.draft;
+type Dated = { id: string; data: { date: Date } };
+const newest = (a: Dated, b: Dated) => b.data.date.valueOf() - a.data.date.valueOf() || a.id.localeCompare(b.id);
+const features = (await getCollection('feature', visible)).sort(newest).slice(0, 2);
+const guides = (await getCollection('guide', visible)).sort(newest).slice(0, 3);
+
+// 公開できる記事が0件の間は、仮文のカードを出す（特集とガイドを別々に判定する）。
+// リンク先は一覧ページで、一覧には「準備中」と出る
+const featurePlaceholders = [
   { title: '（特集タイトル 1）', text: '運営者が選んだ作品群と、その理由を書く場所です。' },
   { title: '（特集タイトル 2）', text: '季節やセールに合わせて入れ替えます。' },
 ];
-const guides = [
+const guidePlaceholders = [
   { title: 'このサイトの使い方', text: '探索ページの重みと絞り込みの考え方。' },
   { title: 'はじめての1本の選び方', text: '「初見向け」ラベルの意味と選び方。' },
   { title: '軸の解説', text: 'シリーズ追い、出演者追い、メーカーの作風。' },
 ];
-// TODO: /guide/ 配下のページができたら、リンク先と「準備中」の表示を差し替える
-const GUIDE_HREF = '/about/#guide';
 ---
 
 <Base
@@ -89,19 +98,28 @@ const GUIDE_HREF = '/about/#guide';
   </section>
 
   <section class="section">
-    <div class="section-head">
+    <div class="section-head" style="flex-wrap: wrap">
       <h2>特集とガイド<span class="muted" style="margin-left: 8px">運営者が選び、運営者が書く</span></h2>
+      <span class="row"><a href="/feature/">特集一覧</a><a href="/guide/">ガイド一覧</a></span>
     </div>
     <div class="hub">
-      {features.map((f) => (
-        <a href={GUIDE_HREF}><span class="kind">特集 ・ 準備中</span><span class="title">{f.title}</span><span class="muted">{f.text}</span></a>
-      ))}
+      {features.length > 0
+        ? features.map((e) => (
+            <ArticleCard href={`/feature/${e.id}/`} title={e.data.title} description={e.data.description} date={e.data.date} kind="特集" draft={e.data.draft} />
+          ))
+        : featurePlaceholders.map((f) => (
+            <a href="/feature/"><span class="kind">特集 ・ 準備中</span><span class="title">{f.title}</span><span class="muted">{f.text}</span></a>
+          ))}
     </div>
     <div style="height: 16px"></div>
     <div class="hub three">
-      {guides.map((g) => (
-        <a href={GUIDE_HREF}><span class="kind">ガイド ・ 準備中</span><span class="title">{g.title}</span><span class="muted">{g.text}</span></a>
-      ))}
+      {guides.length > 0
+        ? guides.map((e) => (
+            <ArticleCard href={`/guide/${e.id}/`} title={e.data.title} description={e.data.description} date={e.data.date} kind="ガイド" draft={e.data.draft} />
+          ))
+        : guidePlaceholders.map((g) => (
+            <a href="/guide/"><span class="kind">ガイド ・ 準備中</span><span class="title">{g.title}</span><span class="muted">{g.text}</span></a>
+          ))}
     </div>
   </section>
 

@@ -1,0 +1,6 @@
+# 全クローラー共通。中継ページ（/go/）は巡回させない。
+User-agent: *
+Disallow: /go/
+
+# site は astro.config.mjs の値（いまは仮ドメイン）。本番のURLに替えるときは、この行も同じ値に合わせる。
+Sitemap: https://example.invalid/sitemap-index.xml

@@ -4,6 +4,7 @@
 import '../styles/tokens.css';
 import '../styles/common.css';
 import AdSlot from '../components/AdSlot.astro';
+import MobileNav from '../components/MobileNav.astro';
 
 interface Props {
   /** ページ名。後ろにサイト名を付けて <title> にする。未指定ならサイト名のみ */
@@ -13,6 +14,12 @@ interface Props {
   dataUpdatedAt?: string;
   /** 確認用。広告スロットの枠を表示する（既定は非表示） */
   showAdSlots?: boolean;
+  /** OGP の種別。ガイド・特集などの記事は 'article'、それ以外は 'website'（既定） */
+  ogType?: 'website' | 'article';
+  /** OGP 画像。絶対URL、または '/' から始まるパス。未指定なら og:image を出さない */
+  ogImage?: string;
+  /** true にすると検索結果に載せない（中継ページ /go/ と 404 用）。既定は載せる */
+  noindex?: boolean;
 }
 
 const SITE_NAME = 'カタログ（仮）';
@@ -21,13 +28,34 @@ const {
   description = '出演者・シリーズ・メーカー・ジャンルの軸から作品を見て回る、カタログ型のサイトです。',
   dataUpdatedAt,
   showAdSlots = false,
+  ogType = 'website',
+  ogImage,
+  noindex = false,
 } = Astro.props;
 
 const pageTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
 const { pathname } = Astro.url;
 
+// canonical と og:url。パスは Astro.url のもの。
+// origin は astro.config の site を使い、開発サーバーでも localhost にならないようにする
+// （ビルド時は Astro.url と同じ値になる）。site 未設定なら Astro.url の origin にする。
+const origin = Astro.site ?? Astro.url;
+const canonicalUrl = new URL(pathname, origin).href;
+
+// og:image は絶対URLにそろえる。不正な値のときは出さない
+function toAbsoluteUrl(value?: string) {
+  if (!value) return undefined;
+  try {
+    return new URL(value, origin).href;
+  } catch {
+    return undefined;
+  }
+}
+const ogImageUrl = toAbsoluteUrl(ogImage);
+
 // 軸メニュー。URL は docs/02_設計方針.md の 2.1 に合わせる。
 // 特集・ハブ記事（使い方）は一覧ページのURLが未定義のため、確定後に追加する。
+// （幅960px未満のメニューは components/MobileNav.astro が別に持つ）
 const nav = [
   { href: '/', label: 'トップ' },
   { href: '/explore/', label: '探索' },
@@ -64,6 +92,20 @@ const updated = formatUpdated(dataUpdatedAt);
     <meta name="color-scheme" content="dark" />
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    {/* 成人向けサイトであることを検索エンジンなどに伝える */}
+    <meta name="rating" content="adult" />
+    {/* 既定は index。中継ページなど載せたくないページだけ noindex を指定する */}
+    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:site_name" content={SITE_NAME} />
+    {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    <meta name="twitter:card" content="summary_large_image" />
+    {/* ページごとの JSON-LD などは、ここに slot="head" で差し込む */}
+    <slot name="head" />
   </head>
   <body class:list={{ 'show-ad-slots': showAdSlots }}>
     {/* 年齢確認。本文より先に置き、初回表示で本文が見えてしまうのを防ぐ */}
@@ -106,6 +148,8 @@ const updated = formatUpdated(dataUpdatedAt);
             <a href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</a>
           ))}
         </nav>
+        {/* 幅960px未満だけ表示するメニュー（PC では CSS で隠れる） */}
+        <MobileNav />
       </div>
     </header>
     <div class="pr-band">

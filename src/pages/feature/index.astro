@@ -1,0 +1,51 @@
+---
+// 特集の一覧（/feature/）。特集は運営者が src/content/feature/ に書く。
+// 本番ビルド（import.meta.env.PROD）では draft を除き、開発時は「下書き」バッジ付きで出す。
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import ArticleCard from '../../components/ArticleCard.astro';
+import '../../styles/article.css';
+
+// 公開日の新しい順。同じ日は ID の順にして、並びが毎回同じになるようにする
+const entries = (await getCollection('feature', ({ data }) => !import.meta.env.PROD || !data.draft)).sort(
+  (a, b) => b.data.date.valueOf() - a.data.date.valueOf() || a.id.localeCompare(b.id),
+);
+---
+
+<Base
+  title="特集"
+  description="運営者が選んだ作品群と、その理由をまとめた特集の一覧です。季節やセールに合わせて入れ替えます。"
+>
+  <nav class="crumb" aria-label="パンくず">
+    <a href="/">トップ</a><span aria-hidden="true"> / </span><span aria-current="page">特集</span>
+  </nav>
+
+  <section class="section" style="margin-top: 16px">
+    <div class="muted">特集</div>
+    <h1>運営者が選んだ特集</h1>
+    <p class="muted">作品群と、選んだ理由。運営者が選び、運営者が書いています。</p>
+  </section>
+
+  <section class="section">
+    {
+      entries.length > 0 ? (
+        <div class="hub">
+          {entries.map((e) => (
+            <ArticleCard
+              href={`/feature/${e.id}/`}
+              title={e.data.title}
+              description={e.data.description}
+              date={e.data.date}
+              kind="特集"
+              draft={e.data.draft}
+            />
+          ))}
+        </div>
+      ) : (
+        <div class="empty">
+          <p>準備中です。</p>
+        </div>
+      )
+    }
+  </section>
+</Base>

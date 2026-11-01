@@ -16,6 +16,7 @@
     "export": "node --experimental-strip-types src/data/cli.ts export"
   },
   "dependencies": {
+    "@astrojs/sitemap": "3.7.4",
     "astro": "7.4.1"
   }
 }

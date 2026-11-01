@@ -1,0 +1,58 @@
+---
+// 幅960px未満で使うメニュー。<details>/<summary> ベースなので、JS がなくても開閉できる。
+// 下のインライン JS は次の3つだけを足す: aria-expanded の同期、Esc で閉じる、外側クリックで閉じる。
+// 見た目は src/styles/common.css の「モバイルメニュー」の節にある（960px以上では非表示）。
+const { pathname } = Astro.url;
+
+// PC の軸メニュー（Base.astro の nav）より、特集・ガイド・運営者情報が多い
+const items = [
+  { href: '/', label: 'トップ' },
+  { href: '/explore/', label: '探索' },
+  { href: '/new/', label: '新着' },
+  { href: '/sale/', label: 'セール' },
+  { href: '/ranking/', label: 'ランキング' },
+  { href: '/feature/', label: '特集' },
+  { href: '/guide/', label: 'ガイド' },
+  { href: '/about/', label: '運営者情報' },
+];
+---
+
+<details class="mnav" id="mnav">
+  {/* summary の名前は表示テキスト「メニュー」。線3本の絵は読み上げ対象から外す */}
+  <summary class="mnav-btn" aria-controls="mnav-panel" aria-expanded="false">
+    <span class="mnav-icon" aria-hidden="true"></span>
+    <span class="mnav-label">メニュー</span>
+  </summary>
+  {/* ヘッダー（sticky）の直下に重ねて表示する */}
+  <nav class="mnav-panel" id="mnav-panel" aria-label="サイトメニュー">
+    <ul>
+      {items.map((item) => (
+        <li>
+          <a href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</a>
+        </li>
+      ))}
+    </ul>
+  </nav>
+</details>
+<script is:inline>
+  (function () {
+    var box = document.getElementById('mnav');
+    if (!box) return;
+    var btn = box.querySelector('summary');
+    // 開閉のたびに aria-expanded を合わせる（toggle は開閉の後に発火する）
+    box.addEventListener('toggle', function () {
+      btn.setAttribute('aria-expanded', box.open ? 'true' : 'false');
+    });
+    // Esc で閉じて、フォーカスをボタンに戻す
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && box.open) {
+        box.open = false;
+        btn.focus();
+      }
+    });
+    // メニューの外側をタップしたら閉じる
+    document.addEventListener('click', function (e) {
+      if (box.open && !box.contains(e.target)) box.open = false;
+    });
+  })();
+</script>

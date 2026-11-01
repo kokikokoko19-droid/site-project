@@ -1,0 +1,64 @@
+---
+// 特集のページ（/feature/{slug}/）。本文は src/content/feature/{slug}.md、載せる作品は frontmatter の works。
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import WorkGrid from '../../components/WorkGrid.astro';
+import { loadCatalog } from '../../lib/catalog.ts';
+import type { CatalogWork } from '../../lib/catalog.ts';
+import '../../styles/article.css';
+
+// 本番ビルドでは draft のパスを作らない。開発時は下書きも開ける（一覧と同じ条件）
+export async function getStaticPaths() {
+  const entries = await getCollection('feature', ({ data }) => !import.meta.env.PROD || !data.draft);
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { data } = entry;
+const { Content } = await render(entry);
+
+// works は content_id の配列。書いた順を保ち、重複とカタログに無いID（取り下げ・打ち間違い）は飛ばす
+const catalog = loadCatalog();
+const ids = [...new Set(data.works)];
+const works = ids.map((id) => catalog.byId.get(id)).filter((w): w is CatalogWork => w !== undefined);
+const skipped = ids.filter((id) => !catalog.byId.has(id));
+if (skipped.length > 0) {
+  console.warn(`[feature/${entry.id}] カタログに無い content_id を飛ばしました: ${skipped.join(', ')}`);
+}
+
+// 日付は UTC で整える（ビルドする環境のタイムゾーンで1日ずれないように）
+const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+// 更新日は、公開日と違うときだけ出す
+const updated = data.updated && iso(data.updated) !== iso(data.date) ? data.updated : null;
+---
+
+<Base title={data.title} description={data.description}>
+  <nav class="crumb" aria-label="パンくず">
+    <a href="/">トップ</a><span aria-hidden="true"> / </span><a href="/feature/">特集</a><span aria-hidden="true"> / </span><span aria-current="page">{data.title}</span>
+  </nav>
+
+  <article class="article">
+    <header class="article-head">
+      <p class="kind">特集{data.draft && <span class="badge-draft">下書き</span>}</p>
+      <h1>{data.title}</h1>
+      <p class="muted article-meta">
+        <span>公開 <time datetime={iso(data.date)}>{fmt.format(data.date)}</time></span>
+        {updated && <span>更新 <time datetime={iso(updated)}>{fmt.format(updated)}</time></span>}
+      </p>
+    </header>
+
+    {data.intro && <p class="lead article-intro">{data.intro}</p>}
+
+    <div class="prose"><Content /></div>
+  </article>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>この特集の作品{works.length > 0 && <span class="muted" style="margin-left: 8px">{works.length}件</span>}</h2>
+    </div>
+    <WorkGrid works={works} empty="作品は準備中です。" />
+  </section>
+
+  <p class="article-foot"><a href="/feature/">特集一覧へ戻る</a></p>
+</Base>

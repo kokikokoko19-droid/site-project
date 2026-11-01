@@ -1,0 +1,154 @@
+# 日次の更新（設計方針 8.1）。
+# 毎日 日本時間 06:00 に、取り込み → 派生計算 → 書き出し → ビルドを行い、dist/ を artifact に残す。
+# 配信（ホストへの転送）はホスト確定後に追加する。今は placeholder で、実際の転送は行わない。
+# 手順と運用上の注意（cache の扱い、secrets の登録、失敗時の見方）は docs/07_運用手順.md を参照。
+name: Daily
+
+on:
+  schedule:
+    # 日本時間 06:00 = UTC 21:00（前日）。GitHub 側の混雑で数分から十数分遅れることがある。
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+    inputs:
+      recent_days:
+        description: '直近の取り込み日数（通常は 7。失敗が続いた後や cache を失った後の取り直しで増やす）'
+        type: string
+        required: false
+        default: '7'
+      ranked_pages:
+        description: '人気順の取り込みページ数（通常は 5。取り直しで増やす）'
+        type: string
+        required: false
+        default: '5'
+
+# 日次は同時に 2 つ動かさない。実行中のものは止めず、後から来たものを待たせる。
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DB_PATH: data/catalog.sqlite
+  EXPORT_DIR: data/export
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      # 実データ（FANZA API）で作ったときだけ 'true'。配信を有効にするときの条件に使う。
+      real_data: ${{ steps.creds.outputs.have_api }}
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        with:
+          # push しないので git の認証情報は残さない
+          persist-credentials: false
+
+      - name: Node.js を用意
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+
+      - name: 依存を入れる
+        run: npm ci
+
+      # secrets は step の if 条件で直接は使えないので、有無の判定だけをこのステップで行い、結果を出力に残す。
+      # secrets はこのステップと「実データを取り込む」ステップにだけ渡す（npm ci などには渡さない）。
+      - name: API 認証情報の有無を確認
+        id: creds
+        env:
+          FANZA_API_ID: ${{ secrets.FANZA_API_ID }}
+          FANZA_AFFILIATE_ID: ${{ secrets.FANZA_AFFILIATE_ID }}
+        run: |
+          if [ -n "$FANZA_API_ID" ] && [ -n "$FANZA_AFFILIATE_ID" ]; then
+            echo "have_api=true" >> "$GITHUB_OUTPUT"
+            echo "データの取得元: 実データ（FANZA API）" >> "$GITHUB_STEP_SUMMARY"
+            echo "FANZA_API_ID と FANZA_AFFILIATE_ID が両方あります。実データを取り込みます。"
+          else
+            echo "have_api=false" >> "$GITHUB_OUTPUT"
+            echo "データの取得元: 合成データ（認証情報がないための代替。配信には使わない）" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=合成データで代替::FANZA_API_ID と FANZA_AFFILIATE_ID の両方が設定されていないため、API を使わず合成データで代替します。この実行の dist は配信に使わないこと。"
+          fi
+
+      # DB の cache は実データのときだけ使う（合成データを実データの DB に混ぜない）。
+      # cache は同じキーで上書きできないので、キーは実行ごとに変える（保存側も同じ形）。
+      # 復元は restore-keys の前方一致で、いちばん新しいものが選ばれる。
+      # 7 日アクセスがないと GitHub が cache を消すため、空の DB から始まっても動く作りにしてある。
+      - name: DB を cache から復元（実データのときだけ）
+        id: restore
+        if: steps.creds.outputs.have_api == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: data/catalog.sqlite
+          key: catalog-db-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            catalog-db-v1-
+
+      - name: 実データを取り込む
+        if: steps.creds.outputs.have_api == 'true'
+        env:
+          FANZA_API_ID: ${{ secrets.FANZA_API_ID }}
+          FANZA_AFFILIATE_ID: ${{ secrets.FANZA_AFFILIATE_ID }}
+          RESTORED_KEY: ${{ steps.restore.outputs.cache-matched-key }}
+          # 手動実行のときだけ入力で変えられる。定期実行は 7 と 5。
+          RECENT_DAYS: ${{ inputs.recent_days || '7' }}
+          RANKED_PAGES: ${{ inputs.ranked_pages || '5' }}
+        run: |
+          if [ -n "$RESTORED_KEY" ]; then
+            echo "復元した DB の cache: $RESTORED_KEY"
+          else
+            echo "::warning title=cache なし::復元できる DB の cache がないため、空の DB から始めます。取り込まれるのは直近 ${RECENT_DAYS} 日分と人気順の上位 ${RANKED_PAGES} ページ分だけです。必要なら手動実行で範囲を広げてください（docs/07_運用手順.md の 3.5 節）。"
+          fi
+          npm run ingest -- --recent-days "$RECENT_DAYS" --refresh --ranked-pages "$RANKED_PAGES"
+
+      - name: 合成データで代替する（認証情報なし）
+        if: steps.creds.outputs.have_api != 'true'
+        run: |
+          echo "認証情報がないため、API を使わず合成データ 3000 件で代替します（cache は使いません）。"
+          npm run ingest -- --synthetic 3000
+
+      - name: 派生データを計算する
+        run: npm run derive
+
+      - name: 探索用 JSON を書き出す
+        run: npm run export
+
+      - name: サイトをビルドする
+        # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする
+        run: npm run build
+
+      # 取り込みから build までが全部成功したときだけ保存する（失敗した実行の DB は残さない）。
+      - name: DB を cache に保存（実データのときだけ）
+        if: steps.creds.outputs.have_api == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: data/catalog.sqlite
+          key: catalog-db-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: dist を artifact に保存
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+          # .htaccess や .well-known など、ドットで始まるファイルも含める
+          include-hidden-files: true
+
+  # 配信（placeholder）。ホスト確定後に、dist/ をホストへ転送する手順をここに入れる。
+  # 今は if が常に false なのでスキップされ、実際の転送は行わない。
+  # 有効にするときの注意:
+  #   - 条件に needs.update.outputs.real_data == 'true' を含め、合成データの dist を本番へ出さない。
+  #   - dist は actions/download-artifact@v4 で artifact「dist」を取得して使う。
+  #   - 接続情報（SSH 鍵、ホスト名など）は secrets に置き、値をログやコミットに出さない。
+  deploy:
+    needs: update
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配信（未実装）
+        run: echo "ホスト確定後に rsync/SSH の手順をここに入れる。今は何も転送しない。"

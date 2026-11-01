@@ -1,0 +1,63 @@
+/* ガイド記事・特集の本文スタイル。色と余白は tokens.css、共通部品（.crumb .lead .hub など）は common.css を使う。
+   行の長さは --prose-w（65ch）。日本語の本文では全角35〜40字ほどの幅になる。変えるときはここだけを直す。 */
+
+.article { --prose-w: 65ch; max-width: var(--prose-w); margin: calc(var(--sp) * 2) auto calc(var(--sp) * 6); }
+
+/* 見出し部（種別・題名・日付） */
+.article-head { display: grid; gap: var(--sp); padding-bottom: calc(var(--sp) * 3); margin-bottom: calc(var(--sp) * 4); border-bottom: 1px solid var(--line); }
+.article-head .kind { color: var(--accent); font-size: 11px; font-weight: 600; letter-spacing: .06em; }
+.article-head h1 { font-size: 22px; line-height: 1.45; overflow-wrap: anywhere; }
+.article-meta { display: flex; flex-wrap: wrap; gap: 4px calc(var(--sp) * 2); }
+@media (min-width: 640px) { .article-head h1 { font-size: 26px; } }
+
+/* 下書きバッジ。開発時の一覧・記事だけに出る（本番ビルドは draft を出さない） */
+.badge-draft { display: inline-block; margin-left: var(--sp); padding: 0 var(--sp); border: 1px solid var(--warn); border-radius: 999px; color: var(--warn); font-size: 11px; font-weight: 600; letter-spacing: 0; line-height: 18px; vertical-align: 1px; }
+
+/* 本文 */
+.prose { font-size: 16px; line-height: 1.95; overflow-wrap: anywhere; }
+.prose > * { margin: 0; }
+.prose > * + * { margin-top: 1.25em; }
+.prose h2, .prose h3, .prose h4 { scroll-margin-top: 72px; } /* sticky のヘッダーに隠れない */
+.prose h2 { margin-top: 2.6em; padding-left: 12px; border-left: 3px solid var(--accent); font-size: 20px; line-height: 1.5; }
+.prose h3 { margin-top: 2em; font-size: 17px; line-height: 1.5; }
+.prose h4 { margin-top: 1.8em; color: var(--fg1); font-size: var(--fs-b); line-height: 1.5; }
+.prose h2 + *, .prose h3 + *, .prose h4 + * { margin-top: .8em; }
+.prose > :first-child { margin-top: 0; }
+.prose strong { font-weight: 600; }
+.prose em { font-style: normal; font-weight: 600; } /* 日本語は斜体にしない */
+
+/* リンクは本文中でも見分けられるよう下線を付ける */
+.prose a { color: var(--accent); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.prose a:hover { text-decoration-thickness: 2px; }
+
+/* リスト */
+.prose ul, .prose ol { padding-left: 1.5em; }
+.prose li + li { margin-top: .4em; }
+.prose li > ul, .prose li > ol { margin-top: .4em; }
+.prose li::marker { color: var(--fg2); }
+
+/* 引用 */
+.prose blockquote { padding: calc(var(--sp) * 1.5) calc(var(--sp) * 2); border-left: 3px solid var(--line); border-radius: 0 var(--radius) var(--radius) 0; background: var(--bg1); color: var(--fg1); }
+.prose blockquote > * + * { margin-top: .8em; }
+
+/* 画像は本文の幅を超えない。公式配信の直リンクを想定し、拡大縮小以外の加工はしない */
+.prose img { max-width: 100%; height: auto; border-radius: var(--radius); }
+.prose figure { margin: 0; }
+.prose figcaption { margin-top: var(--sp); color: var(--fg1); font-size: var(--fs-s); line-height: 1.7; }
+
+/* コード・表は、はみ出すときだけ横にスクロールする（ページ全体は動かさない） */
+.prose code { padding: .1em .4em; border-radius: 4px; background: var(--bg2); font-size: .9em; }
+.prose pre { padding: calc(var(--sp) * 1.5) calc(var(--sp) * 2); overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg1); font-size: 13px; line-height: 1.7; overflow-wrap: normal; }
+.prose pre code { padding: 0; background: none; font-size: inherit; }
+.prose table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 14px; line-height: 1.7; }
+.prose th, .prose td { padding: var(--sp) calc(var(--sp) * 1.5); border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.prose th { background: var(--bg1); font-weight: 600; white-space: nowrap; }
+.prose hr { margin-block: 2.4em; border: 0; border-top: 1px solid var(--line); }
+
+/* 記事の最後（一覧へ戻る）。記事の中に置くときだけ罫線で区切る */
+.article-foot { margin-top: calc(var(--sp) * 4); }
+.article .article-foot { margin-top: calc(var(--sp) * 6); padding-top: calc(var(--sp) * 2); border-top: 1px solid var(--line); }
+.article-foot a { display: inline-flex; align-items: center; min-height: 44px; color: var(--accent); font-size: var(--fs-s); }
+
+/* 特集の導入文（見出しの下）。common.css の .lead（15px）は本文より小さいので、導入と分かるよう本文より一回り大きくする */
+.article .article-intro { margin-bottom: calc(var(--sp) * 4); font-size: 17px; line-height: 1.9; }
