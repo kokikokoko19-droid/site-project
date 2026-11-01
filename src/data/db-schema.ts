@@ -1,7 +1,8 @@
 /**
- * SQLite のスキーマ定義と、Work と行データの相互変換。
- * DB には触れない純粋な部分で、db.ts から使う内部モジュール。
+ * SQLite のスキーマ定義と、Work と行データの相互変換（参照の読み込みを含む）。
+ * db.ts から使う内部モジュール。
  */
+import type { DatabaseSync } from 'node:sqlite';
 import type { Campaign, Delivery, NamedRef, SampleMovie, Work, WorkStatus } from './types.ts';
 
 /** node:sqlite にバインドできる値（undefined と boolean は渡せないので使わない） */
@@ -12,12 +13,8 @@ export type RefKind = 'genre' | 'actress' | 'series' | 'maker' | 'label' | 'dire
 
 /** refs.kind と Work のプロパティ名の対応（保存と組み立ての両方で使う） */
 export const REF_PROPS = [
-  ['genre', 'genres'],
-  ['actress', 'actresses'],
-  ['series', 'series'],
-  ['maker', 'makers'],
-  ['label', 'labels'],
-  ['director', 'directors'],
+  ['genre', 'genres'], ['actress', 'actresses'], ['series', 'series'],
+  ['maker', 'makers'], ['label', 'labels'], ['director', 'directors'],
 ] as const;
 
 /** 作品ごとの参照を種別別に持つ入れ物 */
@@ -56,25 +53,13 @@ const KINDS = "'genre', 'actress', 'series', 'maker', 'label', 'director'";
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS works (
   content_id TEXT PRIMARY KEY,
-  product_id TEXT,
-  title TEXT NOT NULL,
-  url TEXT,
-  affiliate_url TEXT,
-  volume_min INTEGER,
-  released_at TEXT,
-  review_count INTEGER NOT NULL DEFAULT 0,
-  review_avg REAL,
-  price_min INTEGER,
-  list_price INTEGER,
-  deliveries_json TEXT,
-  image_list TEXT,
-  image_small TEXT,
-  image_large TEXT,
-  sample_images_json TEXT,
-  sample_movie_json TEXT,
-  campaigns_json TEXT,
-  rank_position INTEGER,
-  fetched_at TEXT NOT NULL,
+  product_id TEXT, title TEXT NOT NULL, url TEXT, affiliate_url TEXT,
+  volume_min INTEGER, released_at TEXT,
+  review_count INTEGER NOT NULL DEFAULT 0, review_avg REAL,
+  price_min INTEGER, list_price INTEGER,
+  deliveries_json TEXT, image_list TEXT, image_small TEXT, image_large TEXT,
+  sample_images_json TEXT, sample_movie_json TEXT, campaigns_json TEXT,
+  rank_position INTEGER, fetched_at TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'gone')),
   gone_at TEXT
 );
@@ -188,4 +173,24 @@ export function rowToWork(r: WorkRow, refs: RefMap): Work {
     fetchedAt: r.fetched_at,
     status: r.status,
   };
+}
+
+const REF_CHUNK = 500; // IN 句に渡す ID の上限（バインド変数の数の制限を避ける）
+
+/** works の行に refs を結合して Work を組み立てる（各種別の中は position 順） */
+export function loadWorks(db: DatabaseSync, rows: WorkRow[]): Work[] {
+  const refs = new Map<string, RefMap>();
+  for (let i = 0; i < rows.length; i += REF_CHUNK) {
+    const ids = rows.slice(i, i + REF_CHUNK).map((r) => r.content_id);
+    const found = db.prepare(`SELECT wr.content_id, wr.kind, r.id, r.name, r.ruby
+      FROM work_refs wr JOIN refs r ON r.kind = wr.kind AND r.id = wr.ref_id
+      WHERE wr.content_id IN (${ids.map(() => '?').join(', ')})
+      ORDER BY wr.content_id, wr.kind, wr.position`).all(...ids) as RefJoinRow[];
+    for (const f of found) {
+      let m = refs.get(f.content_id);
+      if (!m) refs.set(f.content_id, (m = emptyRefs()));
+      m[f.kind].push({ id: f.id, name: f.name, ruby: f.ruby });
+    }
+  }
+  return rows.map((r) => rowToWork(r, refs.get(r.content_id) ?? emptyRefs()));
 }

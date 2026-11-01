@@ -6,8 +6,8 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { Similar, Work, WorkStatus } from './types.ts';
-import { REF_PROPS, SCHEMA_SQL, UPSERT_WORK_SQL, emptyRefs, rowToWork, workToParams } from './db-schema.ts';
-import type { RefJoinRow, RefMap, SqlValue, WorkRow } from './db-schema.ts';
+import { REF_PROPS, SCHEMA_SQL, UPSERT_WORK_SQL, loadWorks, workToParams } from './db-schema.ts';
+import type { SqlValue, WorkRow } from './db-schema.ts';
 
 export type ListOptions = { status?: WorkStatus; limit?: number; offset?: number };
 
@@ -16,36 +16,26 @@ export type ListOptions = { status?: WorkStatus; limit?: number; offset?: number
  * replaceDerivedLabels / replaceSimilar は、渡した作品の分だけを置き換える（渡さなかった作品には触れない）。
  */
 export type Db = {
-  /** 追加または更新して active に戻す。処理した件数を返す */
-  upsertWorks(works: Work[]): number;
+  upsertWorks(works: Work[]): number; // 追加または更新して active に戻す。処理した件数を返す
   setRankPositions(entries: { contentId: string; rankPosition: number }[]): void;
-  /** activeIds に含まれない active を gone にして、その件数を返す */
-  markGone(activeIds: Iterable<string>, now: string): number;
-  /** gone になって olderThanDays 日を超えた作品を関連行ごと削除し、その件数を返す */
-  purgeGone(olderThanDays: number, now: string): number;
+  markGone(activeIds: Iterable<string>, now: string): number; // activeIds にない active を gone にした件数
+  purgeGone(olderThanDays: number, now: string): number; // gone から olderThanDays 日超の作品を関連行ごと消した件数
   getWork(contentId: string): Work | null;
-  /** content_id 昇順で返す（ページングが安定するように） */
-  listWorks(opts?: ListOptions): Work[];
+  listWorks(opts?: ListOptions): Work[]; // content_id 昇順（ページングが安定する）
   countWorks(status?: WorkStatus): number;
   replaceDerivedLabels(entries: { contentId: string; labels: string[] }[]): void;
-  /** 登録した順に返す */
-  getLabels(contentId: string): string[];
+  getLabels(contentId: string): string[]; // 登録した順
   replaceSimilar(entries: Similar[]): void;
-  /** score の高い順に返す */
-  getSimilar(contentId: string): Similar[];
+  getSimilar(contentId: string): Similar[]; // score の高い順
   setMeta(key: string, value: string): void;
   getMeta(key: string): string | null;
   close(): void;
 };
 
-const DAY_MS = 86_400_000;
-const REF_CHUNK = 500; // IN 句に渡す ID の上限（バインド変数の数の制限を避ける）
-
 /** limit / offset が 0 以上の整数かを確かめる */
 function checkCount(name: string, v: number | undefined): void {
-  if (v !== undefined && (!Number.isInteger(v) || v < 0)) {
-    throw new RangeError(`${name} は 0 以上の整数で指定してください: ${v}`);
-  }
+  if (v === undefined || (Number.isInteger(v) && v >= 0)) return;
+  throw new RangeError(`${name} は 0 以上の整数で指定してください: ${v}`);
 }
 
 /** DB を開く（':memory:' も可）。初回はスキーマを作成する */
@@ -59,6 +49,7 @@ export function openDb(path: string): Db {
 
   const q = (sql: string) => db.prepare(sql);
   const upsertWork = q(UPSERT_WORK_SQL);
+  // 参照マスタ: 名前は新しい値で上書き、ふりがなは null で既存値を消さない
   const upsertRef = q(`INSERT INTO refs (kind, id, name, ruby) VALUES (?, ?, ?, ?)
     ON CONFLICT(kind, id) DO UPDATE SET name = excluded.name, ruby = COALESCE(excluded.ruby, refs.ruby)`);
   const deleteWorkRefs = q('DELETE FROM work_refs WHERE content_id = ?');
@@ -69,6 +60,7 @@ export function openDb(path: string): Db {
   const selectGone = q("SELECT content_id, gone_at FROM works WHERE status = 'gone' AND gone_at IS NOT NULL");
   const deleteWork = q('DELETE FROM works WHERE content_id = ?');
   const selectWork = q('SELECT * FROM works WHERE content_id = ?');
+  const countStmt = q('SELECT COUNT(*) AS n FROM works WHERE (? IS NULL OR status = ?)');
   const deleteLabels = q('DELETE FROM derived_labels WHERE content_id = ?');
   const insertLabel = q('INSERT OR IGNORE INTO derived_labels (content_id, label) VALUES (?, ?)');
   const selectLabels = q('SELECT label FROM derived_labels WHERE content_id = ? ORDER BY rowid');
@@ -84,32 +76,8 @@ export function openDb(path: string): Db {
   /** 書き込みをひとまとめにする。途中で失敗したら全部巻き戻す */
   const tx = <T>(fn: () => T): T => {
     db.exec('BEGIN IMMEDIATE');
-    try {
-      const result = fn();
-      db.exec('COMMIT');
-      return result;
-    } catch (e) {
-      try { db.exec('ROLLBACK'); } catch { /* 元のエラーを優先する */ }
-      throw e;
-    }
-  };
-
-  /** works の行に refs を結合して Work を組み立てる */
-  const loadWorks = (rows: WorkRow[]): Work[] => {
-    const refs = new Map<string, RefMap>();
-    for (let i = 0; i < rows.length; i += REF_CHUNK) {
-      const ids = rows.slice(i, i + REF_CHUNK).map((r) => r.content_id);
-      const found = db.prepare(`SELECT wr.content_id, wr.kind, r.id, r.name, r.ruby
-        FROM work_refs wr JOIN refs r ON r.kind = wr.kind AND r.id = wr.ref_id
-        WHERE wr.content_id IN (${ids.map(() => '?').join(', ')})
-        ORDER BY wr.content_id, wr.kind, wr.position`).all(...ids) as RefJoinRow[];
-      for (const f of found) {
-        let m = refs.get(f.content_id);
-        if (!m) refs.set(f.content_id, (m = emptyRefs()));
-        m[f.kind].push({ id: f.id, name: f.name, ruby: f.ruby });
-      }
-    }
-    return rows.map((r) => rowToWork(r, refs.get(r.content_id) ?? emptyRefs()));
+    try { const result = fn(); db.exec('COMMIT'); return result; }
+    catch (e) { try { db.exec('ROLLBACK'); } catch { /* 元のエラーを優先する */ } throw e; }
   };
 
   return {
@@ -149,7 +117,7 @@ export function openDb(path: string): Db {
     },
 
     purgeGone(olderThanDays, now) {
-      const cutoff = Date.parse(now) - olderThanDays * DAY_MS;
+      const cutoff = Date.parse(now) - olderThanDays * 86_400_000; // 1日 = 86,400,000 ミリ秒
       if (!Number.isFinite(olderThanDays) || olderThanDays < 0 || Number.isNaN(cutoff)) {
         throw new RangeError(`purgeGone の引数が不正です: olderThanDays=${olderThanDays}, now=${now}`);
       }
@@ -166,7 +134,7 @@ export function openDb(path: string): Db {
 
     getWork(contentId) {
       const row = selectWork.get(contentId) as WorkRow | undefined;
-      return row ? loadWorks([row])[0] : null;
+      return row ? loadWorks(db, [row])[0] : null;
     },
 
     listWorks(opts = {}) {
@@ -179,14 +147,11 @@ export function openDb(path: string): Db {
         sql += ' LIMIT ? OFFSET ?';
         params.push(limit ?? -1, offset ?? 0); // SQLite は LIMIT なしの OFFSET を許さないので -1（無制限）
       }
-      return loadWorks(db.prepare(sql).all(...params) as WorkRow[]);
+      return loadWorks(db, db.prepare(sql).all(...params) as WorkRow[]);
     },
 
     countWorks(status) {
-      const row = (status
-        ? db.prepare('SELECT COUNT(*) AS n FROM works WHERE status = ?').get(status)
-        : db.prepare('SELECT COUNT(*) AS n FROM works').get()) as { n: number };
-      return Number(row.n);
+      return Number((countStmt.get(status ?? null, status ?? null) as { n: number }).n);
     },
 
     replaceDerivedLabels(entries) {
@@ -197,7 +162,6 @@ export function openDb(path: string): Db {
         }
       });
     },
-
     getLabels(contentId) {
       return (selectLabels.all(contentId) as { label: string }[]).map((r) => r.label);
     },
@@ -208,7 +172,6 @@ export function openDb(path: string): Db {
         for (const e of entries) insertSimilar.run(e.contentId, e.similarId, e.score);
       });
     },
-
     getSimilar(contentId) {
       const rows = selectSimilar.all(contentId) as { content_id: string; similar_id: string; score: number }[];
       return rows.map((r) => ({ contentId: r.content_id, similarId: r.similar_id, score: r.score }));
@@ -217,7 +180,6 @@ export function openDb(path: string): Db {
     setMeta(key, value) {
       putMeta.run(key, value);
     },
-
     getMeta(key) {
       const row = readMeta.get(key) as { value: string | null } | undefined;
       return row?.value ?? null;

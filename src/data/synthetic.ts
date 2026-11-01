@@ -43,7 +43,9 @@ function pickDistinct(r: () => number, size: number, k: number): number[] {
   const idx = Array.from({ length: size }, (_, n) => n);
   for (let n = 0; n < k; n++) {
     const j = n + Math.floor(r() * (size - n));
-    [idx[n], idx[j]] = [idx[j], idx[n]];
+    const tmp = idx[n] as number;
+    idx[n] = idx[j] as number;
+    idx[j] = tmp;
   }
   return idx.slice(0, k);
 }

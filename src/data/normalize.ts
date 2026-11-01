@@ -60,10 +60,11 @@ function toIsoDateTime(v: unknown): string | null {
   const s = toStr(v);
   const m = s?.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
   if (!m) return null;
-  const [y, mo, d, h, mi, sec] = [m[1], m[2], m[3], m[4] ?? '0', m[5] ?? '0', m[6] ?? '0'].map((x) => Number(x));
+  const n = (x: string | undefined): number => Number(x ?? '0');
+  const [y, mo, d, h, mi, sec] = [n(m[1]), n(m[2]), n(m[3]), n(m[4]), n(m[5]), n(m[6])] as const;
   const day = new Date(Date.UTC(y, mo - 1, d));
   const valid = day.getUTCMonth() === mo - 1 && day.getUTCDate() === d && h <= 23 && mi <= 59 && sec <= 59;
-  return valid ? `${m[1]}-${pad2(mo)}-${pad2(d)}T${pad2(h)}:${pad2(mi)}:${pad2(sec)}` : null;
+  return valid ? `${String(y).padStart(4, '0')}-${pad2(mo)}-${pad2(d)}T${pad2(h)}:${pad2(mi)}:${pad2(sec)}` : null;
 }
 
 /** iteminfo の [{id, name, ruby?}] を NamedRef[] にする。id は文字列化、ruby があれば保持、他のキーは捨てる */

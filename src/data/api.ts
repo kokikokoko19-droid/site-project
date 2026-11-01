@@ -1,9 +1,7 @@
 // FANZA（DMM Web Service）API v3 クライアント（docs/03_技術調査_FANZA_API.md の 1・4・5 節に準拠）。
-// 方針:
-// - 作品データは実行時に API から取得するだけで、ここでは保存しない（保存はキャッシュ設計に従う）。
-// - URL（クエリに api_id / affiliate_id を含む）と、レスポンスの request キー（request.parameters に
-//   API ID が平文で入る）は、例外メッセージにも出力にも含めない。このファイルはログ出力をしない。
-// - 入力検証の違反は通信前に RangeError。メソッドは async なので、呼び出し側には reject として届く。
+// 方針: 作品データは実行時に API から取得するだけで保存しない（保存はキャッシュ設計に従う）。
+// URL（クエリに api_id / affiliate_id を含む）とレスポンスの request キー（API ID が平文で入る）は、
+// 例外メッセージにも出力にも含めない（このファイルはログ出力をしない）。検証違反は通信前に RangeError。
 
 const DEFAULT_BASE_URL = 'https://api.dmm.com/affiliate/v3/';
 const SORTS = ['rank', 'price', '-price', 'date', 'review', 'match'] as const;
@@ -16,38 +14,18 @@ type Scalar = string | number;
 export type ParamValue = Scalar | readonly Scalar[] | null | undefined;
 export type Params = Record<string, ParamValue>;
 export type RawRecord = Record<string, unknown>;
-
 export type ClientOptions = {
-  apiId: string;
-  affiliateId: string;
-  fetchImpl?: typeof fetch;
-  minIntervalMs?: number;
-  maxRetries?: number;
-  baseUrl?: string;
+  apiId: string; affiliateId: string; fetchImpl?: typeof fetch;
+  minIntervalMs?: number; maxRetries?: number; baseUrl?: string;
   sleep?: (ms: number) => Promise<void>;
 };
 export type ItemListParams = {
-  site?: string;
-  service?: string;
-  floor?: string;
-  hits?: number;
-  offset?: number;
-  sort?: (typeof SORTS)[number];
-  article?: string | readonly string[];
-  article_id?: Scalar | readonly Scalar[];
-  gte_date?: string;
-  lte_date?: string;
-  cid?: string;
-  keyword?: string;
+  site?: string; service?: string; floor?: string; hits?: number; offset?: number;
+  sort?: (typeof SORTS)[number]; article?: string | readonly string[]; article_id?: Scalar | readonly Scalar[];
+  gte_date?: string; lte_date?: string; cid?: string; keyword?: string;
 };
 export type SearchParams = { floor_id: Scalar; hits?: number; offset?: number; initial?: string };
-export type ActressSearchParams = {
-  hits?: number;
-  offset?: number;
-  initial?: string;
-  actress_id?: Scalar;
-  keyword?: string;
-};
+export type ActressSearchParams = { hits?: number; offset?: number; initial?: string; actress_id?: Scalar; keyword?: string };
 type Page = { status: number; resultCount: number; totalCount: number; firstPosition: number };
 export type ItemListResult = Page & { items: RawRecord[] };
 export type SearchResult = Page & { list: RawRecord[] };
@@ -73,14 +51,12 @@ export function buildUrl(path: string, params: Params, baseUrl: string = DEFAULT
 function checkInt(name: string, v: number | undefined, min: number, max: number): void {
   if (v === undefined) return;
   if (!Number.isInteger(v) || v < min || v > max) {
-    const range = Number.isFinite(max) ? `${min}〜${max}` : `${min} 以上`;
-    throw new RangeError(`${name} は ${range} の整数で指定してください（指定値: ${String(v)}）`);
+    const range = Number.isFinite(max) ? `${min}〜${max}` : `${min}以上`;
+    throw new RangeError(`${name} は ${range}の整数で指定してください（指定値: ${String(v)}）`);
   }
 }
 function checkDate(name: string, v: string | undefined): void {
-  if (v !== undefined && !DATE_RE.test(v)) {
-    throw new RangeError(`${name} は YYYY-MM-DDTHH:MM:SS 形式で指定してください`);
-  }
+  if (v !== undefined && !DATE_RE.test(v)) throw new RangeError(`${name} は YYYY-MM-DDTHH:MM:SS 形式で指定してください`);
 }
 function floorIdOf(v: unknown): string {
   const s = typeof v === 'string' || typeof v === 'number' ? String(v) : '';
@@ -96,22 +72,12 @@ function toInt(v: unknown, fallback: number): number {
 }
 // 0件・範囲外は HTTP 200 で配列のキー自体が欠落し得るので、欠落時は空配列にする。
 const rowsOf = (v: unknown): RawRecord[] => (Array.isArray(v) ? (v as RawRecord[]) : []);
-function pageOf(result: RawRecord, rows: RawRecord[]): Page {
-  return {
-    status: toInt(result.status, 200),
-    resultCount: toInt(result.result_count, rows.length),
-    totalCount: toInt(result.total_count, 0),
-    firstPosition: toInt(result.first_position, 0),
-  };
-}
-
-async function drain(res: Response): Promise<void> {
-  try {
-    await res.body?.cancel(); // 使わない本文を破棄して接続を解放する
-  } catch {
-    // 破棄に失敗しても処理は続ける
-  }
-}
+const pageOf = (r: RawRecord, rows: RawRecord[]): Page => ({
+  status: toInt(r.status, 200),
+  resultCount: toInt(r.result_count, rows.length),
+  totalCount: toInt(r.total_count, 0),
+  firstPosition: toInt(r.first_position, 0),
+});
 
 async function parseResult(res: Response, path: string): Promise<RawRecord> {
   let body: unknown;
@@ -136,12 +102,8 @@ export function createClient(opts: ClientOptions) {
   const baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   if (!apiId || !affiliateId) throw new RangeError('apiId と affiliateId は必須です');
-  if (!Number.isFinite(minIntervalMs) || minIntervalMs < 0) {
-    throw new RangeError('minIntervalMs は 0 以上の数値で指定してください');
-  }
-  if (!Number.isInteger(maxRetries) || maxRetries < 0) {
-    throw new RangeError('maxRetries は 0 以上の整数で指定してください');
-  }
+  checkInt('minIntervalMs', minIntervalMs, 0, Infinity);
+  checkInt('maxRetries', maxRetries, 0, Infinity);
   try {
     new URL(baseUrl);
   } catch {
@@ -176,7 +138,7 @@ export function createClient(opts: ClientOptions) {
       }
       if (res?.ok) return await parseResult(res, path);
       const status = res?.status ?? 0;
-      if (res) await drain(res);
+      if (res) await res.body?.cancel().catch(() => {}); // 使わない本文を破棄して接続を解放する
       const retryable = status === 0 || status === 429 || status >= 500;
       if (!retryable || attempt >= maxRetries) {
         const message = status === 0 ? `FANZA API: 通信に失敗しました（${path}）` : `FANZA API: HTTP ${status}（${path}）`;
@@ -206,18 +168,9 @@ export function createClient(opts: ClientOptions) {
       checkDate('gte_date', p.gte_date);
       checkDate('lte_date', p.lte_date);
       const result = await call('ItemList', {
-        site: p.site ?? 'FANZA',
-        service: p.service ?? 'digital',
-        floor: p.floor ?? 'videoa',
-        hits: p.hits,
-        offset: p.offset,
-        sort: p.sort,
-        article: p.article,
-        article_id: p.article_id,
-        gte_date: p.gte_date,
-        lte_date: p.lte_date,
-        cid: p.cid,
-        keyword: p.keyword,
+        site: p.site ?? 'FANZA', service: p.service ?? 'digital', floor: p.floor ?? 'videoa',
+        hits: p.hits, offset: p.offset, sort: p.sort, article: p.article, article_id: p.article_id,
+        gte_date: p.gte_date, lte_date: p.lte_date, cid: p.cid, keyword: p.keyword,
       });
       const items = rowsOf(result.items);
       return { ...pageOf(result, items), items };
@@ -232,13 +185,8 @@ export function createClient(opts: ClientOptions) {
     async actressSearch(p: ActressSearchParams = {}): Promise<SearchResult> {
       checkInt('hits', p.hits, 1, 100);
       checkInt('offset', p.offset, 1, Infinity);
-      const result = await call('ActressSearch', {
-        hits: p.hits,
-        offset: p.offset,
-        initial: p.initial,
-        actress_id: p.actress_id,
-        keyword: p.keyword,
-      });
+      const { hits, offset, initial, actress_id, keyword } = p;
+      const result = await call('ActressSearch', { hits, offset, initial, actress_id, keyword });
       const list = rowsOf(result.actress);
       return { ...pageOf(result, list), list };
     },
