@@ -6,39 +6,38 @@ import { buildUrl, createClient } from '../src/data/api.ts';
 
 const API_ID = 'TEST_API_ID_DUMMY';
 const AFF_ID = 'testaff-990';
-const json = (b: unknown, status = 200) =>
-  new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
+const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
 // 実応答と同じく request.parameters に API ID が平文で入る、合成レスポンス。
 const wrap = (result: object) => ({ request: { parameters: { api_id: API_ID, affiliate_id: AFF_ID } }, result });
-const itemsBody = () =>
-  wrap({
-    status: 200, result_count: 2, total_count: 120, first_position: 1,
-    items: [{ content_id: 'test001', title: 'テスト作品A' }, { content_id: 'test002', title: 'テスト作品B' }],
-  });
+const itemsBody = () => wrap({
+  status: 200, result_count: 2, total_count: 120, first_position: 1,
+  items: [{ content_id: 'test001', title: 'テスト作品A' }, { content_id: 'test002', title: 'テスト作品B' }],
+});
 const searchBody = (key: string) =>
   wrap({ status: '200', result_count: 1, total_count: 1, first_position: 1, [key]: [{ id: '1', name: 'テスト' }] });
-
-// 呼ばれた URL を記録する fetch。responders を順に返し、尽きたら最後のものを繰り返す。
-function stub(...responders: Array<() => Response>) {
-  const urls: URL[] = [];
-  const fetchImpl = (async (input: string | URL | Request) => {
-    urls.push(new URL(String(input)));
-    return responders[Math.min(urls.length, responders.length) - 1]!();
-  }) as typeof fetch;
-  return { fetchImpl, urls };
-}
-// 待ち時間を記録するだけの sleep を注入したクライアント（既定は間隔 0 で、待たない）。
-function make(fetchImpl: typeof fetch, extra: { minIntervalMs?: number; maxRetries?: number } = {}) {
-  const sleeps: number[] = [];
-  const sleep = async (ms: number) => { sleeps.push(ms); };
-  const client = createClient({ apiId: API_ID, affiliateId: AFF_ID, fetchImpl, sleep, minIntervalMs: 0, ...extra });
-  return { client, sleeps };
-}
 const failure = (p: Promise<unknown>) => p.then(() => assert.fail('reject されるはず'), (e: unknown) => e as Error);
 
+// fetch / sleep を差し替えたクライアント。responders を順に返し（尽きたら最後を繰り返す）、
+// 呼ばれた URL と sleep の待ち時間を記録する。minIntervalMs の既定は 0（待たない）。
+function make(
+  responders: Array<(url: URL) => Response>,
+  { tick, ...extra }: { minIntervalMs?: number; maxRetries?: number; tick?: (ms: number) => void } = {},
+) {
+  const urls: URL[] = [];
+  const sleeps: number[] = [];
+  const fetchImpl = (async (input: string | URL | Request) => {
+    const url = new URL(String(input));
+    urls.push(url);
+    return responders[Math.min(urls.length, responders.length) - 1]!(url);
+  }) as typeof fetch;
+  const sleep = async (ms: number) => { sleeps.push(ms); tick?.(ms); };
+  const client = createClient({ apiId: API_ID, affiliateId: AFF_ID, fetchImpl, sleep, minIntervalMs: 0, ...extra });
+  return { client, urls, sleeps };
+}
+
 test('itemList: 既定値と指定パラメータが URL のクエリに入る', async () => {
-  const { fetchImpl, urls } = stub(() => json(itemsBody()));
-  await make(fetchImpl).client.itemList({
+  const { client, urls } = make([() => json(itemsBody())]);
+  await client.itemList({
     hits: 50, offset: 101, sort: 'date', article: ['genre', 'actress'], article_id: [1, 2],
     cid: 'test001', keyword: 'テスト 検索', gte_date: '2016-04-01T00:00:00', lte_date: '2016-04-30T23:59:59',
   });
@@ -55,18 +54,16 @@ test('itemList: 既定値と指定パラメータが URL のクエリに入る',
 });
 
 test('itemList: 指定なしなら既定の site/service/floor だけを付け、単一の article はそのまま', async () => {
-  const { fetchImpl, urls } = stub(() => json(itemsBody()));
-  const { client } = make(fetchImpl);
+  const { client, urls } = make([() => json(itemsBody())]);
   await client.itemList();
   assert.deepEqual([...urls[0]!.searchParams.keys()].sort(), ['affiliate_id', 'api_id', 'floor', 'output', 'service', 'site']);
   await client.itemList({ article: 'genre', article_id: 5 });
-  assert.equal(urls[1]!.searchParams.get('article'), 'genre');
-  assert.equal(urls[1]!.searchParams.get('article_id'), '5');
+  const q = urls[1]!.searchParams;
+  assert.deepEqual([q.get('article'), q.get('article_id')], ['genre', '5']);
 });
 
 test('不正な値（hits/offset/sort/日付）は RangeError になり、通信しない', async () => {
-  const { fetchImpl, urls } = stub(() => json(itemsBody()));
-  const { client } = make(fetchImpl);
+  const { client, urls } = make([() => json(itemsBody())]);
   const bad = [
     { hits: 0 }, { hits: 101 }, { hits: 1.5 }, { offset: 0 }, { offset: 50001 }, { sort: 'bogus' },
     { gte_date: '2016-04-01' }, { lte_date: '2016-04-01 00:00:00' }, { gte_date: '2016-13-01T00:00:00' },
@@ -80,55 +77,49 @@ test('不正な値（hits/offset/sort/日付）は RangeError になり、通信
 test('genre/maker/series の Search: floor_id 必須、hits は 1〜500', async () => {
   const cases = [['genreSearch', 'GenreSearch', 'genre'], ['makerSearch', 'MakerSearch', 'maker'], ['seriesSearch', 'SeriesSearch', 'series']] as const;
   for (const [method, path, key] of cases) {
-    const { fetchImpl, urls } = stub(() => json(searchBody(key)));
-    const { client } = make(fetchImpl);
-    await assert.rejects(() => client[method]({} as never), RangeError);
-    await assert.rejects(() => client[method]({ floor_id: 'videoa' }), RangeError); // code ではなく数字の id が必要
-    await assert.rejects(() => client[method]({ floor_id: 43, hits: 0 }), RangeError);
-    await assert.rejects(() => client[method]({ floor_id: 43, hits: 501 }), RangeError);
+    const { client, urls } = make([() => json(searchBody(key))]);
+    // 'videoa' は code であって id ではないので不可
+    for (const bad of [{}, { floor_id: 'videoa' }, { floor_id: 43, hits: 0 }, { floor_id: 43, hits: 501 }]) {
+      await assert.rejects(() => client[method](bad as never), RangeError, `${method}:${JSON.stringify(bad)}`);
+    }
     assert.equal(urls.length, 0);
     const r = await client[method]({ floor_id: 43, hits: 500, offset: 1, initial: 'あ' });
     assert.equal(urls[0]!.pathname, `/affiliate/v3/${path}`);
-    for (const [k, v] of Object.entries({ floor_id: '43', hits: '500', offset: '1', initial: 'あ', output: 'json', api_id: API_ID })) {
-      assert.equal(urls[0]!.searchParams.get(k), v, `${method}:${k}`);
-    }
+    const q = urls[0]!.searchParams;
+    for (const [k, v] of Object.entries({ floor_id: '43', hits: '500', offset: '1', initial: 'あ', output: 'json' })) assert.equal(q.get(k), v, `${method}:${k}`);
     assert.deepEqual(r, { status: 200, resultCount: 1, totalCount: 1, firstPosition: 1, list: [{ id: '1', name: 'テスト' }] });
   }
 });
 
 test('actressSearch は hits が 1〜100、floorList は site 一覧を返す', async () => {
-  const a = stub(() => json(searchBody('actress')));
-  await assert.rejects(() => make(a.fetchImpl).client.actressSearch({ hits: 101 }), RangeError);
-  await assert.rejects(() => make(a.fetchImpl).client.actressSearch({ hits: 0 }), RangeError);
+  const a = make([() => json(searchBody('actress'))]);
+  for (const hits of [0, 101]) await assert.rejects(() => a.client.actressSearch({ hits }), RangeError);
   assert.equal(a.urls.length, 0);
-  const r = await make(a.fetchImpl).client.actressSearch({ hits: 100, keyword: 'テスト' });
+  const r = await a.client.actressSearch({ hits: 100, keyword: 'テスト' });
   assert.equal(a.urls[0]!.searchParams.get('hits'), '100');
   assert.equal(r.list.length, 1);
-  const f = stub(() => json(wrap({ site: [{ name: 'テスト', code: 'FANZA', service: [] }] })));
-  const fl = await make(f.fetchImpl).client.floorList();
+  const sites = [{ name: 'テスト', code: 'FANZA', service: [] }];
+  const f = make([() => json(wrap({ site: sites }))]);
+  assert.deepEqual(await f.client.floorList(), { status: 200, sites });
   assert.equal(f.urls[0]!.pathname, '/affiliate/v3/FloorList');
-  assert.deepEqual(fl, { status: 200, sites: [{ name: 'テスト', code: 'FANZA', service: [] }] });
 });
 
 test('レスポンスの request（API ID 入り）は、どの API の結果にも含まれない', async () => {
-  const { fetchImpl } = stub(() => json(itemsBody()));
-  const r = await make(fetchImpl).client.itemList();
+  const r = await make([() => json(itemsBody())]).client.itemList();
   assert.deepEqual(Object.keys(r).sort(), ['firstPosition', 'items', 'resultCount', 'status', 'totalCount']);
   assert.equal(r.totalCount, 120);
   assert.ok(!JSON.stringify(r).includes(API_ID) && !JSON.stringify(r).includes('request'));
-  const s = await make(stub(() => json(searchBody('genre'))).fetchImpl).client.genreSearch({ floor_id: 43 });
+  const s = await make([() => json(searchBody('genre'))]).client.genreSearch({ floor_id: 43 });
   assert.ok(!JSON.stringify(s).includes(API_ID) && !('request' in s));
 });
 
 test('0件で items キーが欠落しても空配列で返し、文字列の status は数値にする', async () => {
-  const { fetchImpl } = stub(() => json(wrap({ status: '200', result_count: 0, total_count: 0 })));
-  const r = await make(fetchImpl).client.itemList({ offset: 50000 });
-  assert.deepEqual(r, { status: 200, resultCount: 0, totalCount: 0, firstPosition: 0, items: [] });
+  const { client } = make([() => json(wrap({ status: '200', result_count: 0, total_count: 0 }))]);
+  assert.deepEqual(await client.itemList({ offset: 50000 }), { status: 200, resultCount: 0, totalCount: 0, firstPosition: 0, items: [] });
 });
 
 test('429 のあと 200 なら再試行して成功し、sleep が呼ばれる', async () => {
-  const { fetchImpl, urls } = stub(() => json({}, 429), () => json(itemsBody()));
-  const { client, sleeps } = make(fetchImpl);
+  const { client, urls, sleeps } = make([() => json({}, 429), () => json(itemsBody())]);
   const r = await client.itemList();
   assert.equal(urls.length, 2);
   assert.deepEqual(sleeps, [1000]);
@@ -136,8 +127,7 @@ test('429 のあと 200 なら再試行して成功し、sleep が呼ばれる',
 });
 
 test('5xx が続くと maxRetries 回まで指数バックオフし、最後は Error（URL・ID を含まない）', async () => {
-  const { fetchImpl, urls } = stub(() => json(wrap({}), 503));
-  const { client, sleeps } = make(fetchImpl, { maxRetries: 3 });
+  const { client, urls, sleeps } = make([() => json(wrap({}), 503)], { maxRetries: 3 });
   const e = await failure(client.itemList());
   assert.match(e.message, /HTTP 503/);
   assert.equal(urls.length, 4);
@@ -146,8 +136,7 @@ test('5xx が続くと maxRetries 回まで指数バックオフし、最後は 
 });
 
 test('400 は再試行せず Error（メッセージに URL のクエリ・ID を含まない）', async () => {
-  const { fetchImpl, urls } = stub(() => json(wrap({}), 400));
-  const { client, sleeps } = make(fetchImpl);
+  const { client, urls, sleeps } = make([() => json(wrap({}), 400)]);
   const e = await failure(client.itemList());
   assert.match(e.message, /HTTP 400/);
   assert.equal(urls.length, 1);
@@ -156,10 +145,7 @@ test('400 は再試行せず Error（メッセージに URL のクエリ・ID �
 });
 
 test('通信例外は再試行し、尽きたら固定文言の Error（元の例外が持つ URL は漏らさない）', async () => {
-  const fetchImpl = (async (input: string | URL | Request) => {
-    throw new TypeError(`fetch failed: ${String(input)}`);
-  }) as typeof fetch;
-  const { client, sleeps } = make(fetchImpl, { maxRetries: 2 });
+  const { client, sleeps } = make([(url) => { throw new TypeError(`fetch failed: ${url}`); }], { maxRetries: 2 });
   const e = await failure(client.itemList());
   assert.deepEqual(sleeps, [1000, 2000]);
   assert.ok(!e.message.includes(API_ID) && !e.message.includes('api_id') && e.cause === undefined);
@@ -167,26 +153,30 @@ test('通信例外は再試行し、尽きたら固定文言の Error（元の�
 
 test('連続呼び出しは minIntervalMs の間隔を空ける（前回の開始時刻からの差で待つ）', async (t) => {
   t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
-  const { fetchImpl } = stub(() => json(itemsBody()));
-  const sleeps: number[] = [];
-  const sleep = async (ms: number) => { sleeps.push(ms); t.mock.timers.tick(ms); }; // 待った分だけ時計を進める
-  const client = createClient({ apiId: API_ID, affiliateId: AFF_ID, fetchImpl, sleep, minIntervalMs: 500 });
+  const tick = (ms: number) => t.mock.timers.tick(ms); // 待った分だけ時計を進める
+  const { client, sleeps } = make([() => json(itemsBody())], { minIntervalMs: 500, tick });
   await client.itemList();
   assert.deepEqual(sleeps, []); // 1回目は待たない
   await client.itemList();
   assert.deepEqual(sleeps, [500]); // 2回目は 500ms 待つ
-  t.mock.timers.tick(200); // 200ms 経ってから3回目
+  tick(200); // 200ms 経ってから3回目
   await client.itemList();
   assert.deepEqual(sleeps, [500, 300]); // 残りの 300ms だけ待つ
 });
 
-test('同時に呼んでも、最小間隔を空けて直列に通信する', async (t) => {
-  t.mock.timers.enable({ apis: ['Date'], now: 0 });
-  const { fetchImpl, urls } = stub(() => json(itemsBody()));
-  const { client, sleeps } = make(fetchImpl, { minIntervalMs: 500 });
-  await Promise.all([client.itemList(), client.itemList(), client.itemList()]);
-  assert.equal(urls.length, 3);
-  assert.deepEqual(sleeps, [500, 500]);
+test('同時に呼んでも、直前の通信の開始から minIntervalMs を空けて直列に通信する', async (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 0 }); // sleep は既定（モックした setTimeout）
+  const starts: number[] = [];
+  const fetchImpl = (async () => { starts.push(Date.now()); return json(itemsBody()); }) as typeof fetch;
+  const client = createClient({ apiId: API_ID, affiliateId: AFF_ID, fetchImpl, minIntervalMs: 500 });
+  let done = false;
+  const all = Promise.all([client.itemList(), client.itemList(), client.itemList()]).finally(() => { done = true; });
+  for (let i = 0; i < 20 && !done; i++) {
+    await new Promise((resolve) => setImmediate(resolve)); // 待ち行列を進めてから
+    t.mock.timers.tick(500); // 時計を進める
+  }
+  await all;
+  assert.deepEqual(starts, [0, 500, 1000]); // 3本が同時に動かず、500ms ずつずれる
 });
 
 test('buildUrl: 配列は key[i] に展開し undefined は除く。api_id はマスクしない（内部用）', () => {
@@ -199,9 +189,7 @@ test('buildUrl: 配列は key[i] に展開し undefined は除く。api_id は�
 
 test('createClient: 必須項目と数値オプション・baseUrl を検証する', () => {
   const base = { apiId: API_ID, affiliateId: AFF_ID };
-  assert.throws(() => createClient({ ...base, apiId: '' }), RangeError);
-  assert.throws(() => createClient({ ...base, affiliateId: '' }), RangeError);
-  assert.throws(() => createClient({ ...base, minIntervalMs: -1 }), RangeError);
-  assert.throws(() => createClient({ ...base, maxRetries: 1.5 }), RangeError);
-  assert.throws(() => createClient({ ...base, baseUrl: 'not a url' }), RangeError);
+  for (const bad of [{ apiId: '' }, { affiliateId: '' }, { minIntervalMs: -1 }, { maxRetries: 1.5 }, { baseUrl: 'not a url' }]) {
+    assert.throws(() => createClient({ ...base, ...bad }), RangeError, JSON.stringify(bad));
+  }
 });
