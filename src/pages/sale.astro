@@ -1,0 +1,31 @@
+---
+// セール中の作品の全件（「セール中」の派生ラベルが付いたもの）。配信開始日の新しい順。
+import Base from '../layouts/Base.astro';
+import AdSlot from '../components/AdSlot.astro';
+import WorkGrid from '../components/WorkGrid.astro';
+import { loadCatalog } from '../lib/catalog.ts';
+
+const catalog = loadCatalog();
+const works = catalog.onSale();
+---
+
+<Base
+  title="セール"
+  description="期間限定のセール対象になっている作品を並べています。"
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  <section class="section">
+    <h1>セール中</h1>
+    {
+      works.length > 0 && (
+        <p class="muted">セール対象の作品 {works.length}件（配信開始日の新しい順）。価格とセール期間はデータ更新時点の情報です。最新の内容は販売ページで確認してください。</p>
+      )
+    }
+  </section>
+
+  <section class="section">
+    <WorkGrid works={works} empty="現在セール中の作品はありません。" />
+  </section>
+
+  <AdSlot name="sale-bottom" />
+</Base>

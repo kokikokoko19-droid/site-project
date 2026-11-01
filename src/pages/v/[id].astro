@@ -1,0 +1,173 @@
+---
+// 作品ページ /v/{content_id}/（設計方針 2.1）。作品1件につき1ページを静的に生成する。
+// 構成は mocks/ui.js の detail() と同じ順: パンくず → 見出し → 画像＋説明・仕様・リンク → サンプル → 広告枠 → 似た作品。
+// 紹介文は公式の文章を使わず、データ駆動の自動文（pageText）だけを出す。欠けた項目は行ごと省き、「不明」などは出さない。
+import Base from '../../layouts/Base.astro';
+import WorkCard from '../../components/WorkCard.astro';
+import AdSlot from '../../components/AdSlot.astro';
+import CtaButton from '../../components/CtaButton.astro';
+import AxisLinks from '../../components/AxisLinks.astro';
+import SampleMovie from '../../components/SampleMovie.astro';
+import SampleGallery from '../../components/SampleGallery.astro';
+import { loadCatalog } from '../../lib/catalog.ts';
+import type { CatalogWork } from '../../lib/catalog.ts';
+import { cardText, pageText } from '../../lib/autotext.ts';
+import { fmtDate, minutes, ymd, yen } from '../../lib/format.ts';
+
+/** active の作品すべて（loadCatalog は gone を除く）。作品は props で渡す */
+export function getStaticPaths() {
+  return loadCatalog().works.map((work) => ({ params: { id: work.contentId }, props: { work } }));
+}
+
+interface Props {
+  work: CatalogWork;
+}
+const { work } = Astro.props;
+const catalog = loadCatalog();
+
+const names = (refs: { name: string }[]): string[] => refs.map((r) => (r.name ?? '').trim()).filter((s) => s !== '');
+const cast = names(work.actresses);
+const castLine = cast.length > 5 ? `${cast.slice(0, 5).join('、')}ほか` : cast.join('、');
+const maker = work.makers.find((m) => m.id && (m.name ?? '').trim() !== '');
+
+// meta description は自動文の先頭120字（超えるときは末尾に「…」）
+const text = pageText(work);
+const chars = [...text];
+const description = chars.length === 0 ? undefined : chars.length > 120 ? `${chars.slice(0, 120).join('')}…` : text;
+
+const crumbs = [
+  { href: '/', label: 'トップ' },
+  { href: '/explore/', label: '探索' },
+  ...(maker ? [{ href: `/maker/${encodeURIComponent(maker.id)}/`, label: maker.name.trim() }] : []),
+];
+
+// 画像は公式配信の直リンク。大 → 一覧用 → 色の枠（モックと同じ色計算。WorkCard と同じ色になる）
+const cover = work.imageLarge || work.imageList || null;
+const hash = (s: string) => {
+  let h = 0;
+  for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return h;
+};
+const hue = hash(work.contentId) % 360;
+const frame = `background: linear-gradient(145deg, hsl(${hue} 28% 30%), hsl(${(hue + 40) % 360} 24% 16%));`;
+const HOT = new Set(['高評価', 'セール中', '初見向け']);
+
+// 仕様表。欠けた行は出さない（レビューが0件の行も出さない）
+const reviewOk = work.reviewCount > 0 && typeof work.reviewAvg === 'number' && Number.isFinite(work.reviewAvg);
+const rows = [
+  { label: '出演', value: cast.join('、') },
+  { label: 'メーカー', value: names(work.makers).join('、') },
+  { label: 'シリーズ', value: names(work.series).join('、') },
+  { label: '収録', value: minutes(work.volumeMin) },
+  { label: '配信開始', value: fmtDate(work.releasedAt) },
+  { label: 'レビュー', value: reviewOk ? `${work.reviewAvg!.toFixed(2)}点・${work.reviewCount}件` : '' },
+].filter((r) => r.value !== '');
+const price = yen(work.priceMin);
+const onSale = work.derivedLabels.includes('セール中') && work.listPrice !== null && work.priceMin !== null && work.listPrice > work.priceMin;
+
+// /go/{id}/ は affiliateUrl が http(s) の作品にしか作られない（go/[id].astro と同じ条件）。無い作品にはボタンを出さない
+const hasLink = typeof work.affiliateUrl === 'string' && /^https?:\/\//.test(work.affiliateUrl);
+
+const similar = catalog.similar(work, 8).map((s) => ({
+  id: s.contentId, title: s.title, imageSmall: s.imageSmall, actresses: names(s.actresses),
+  maker: s.makers[0]?.name ?? null, cardText: cardText(s), labels: s.derivedLabels,
+}));
+
+// 構造化データ。商品（Product）ではなく CreativeWork を最小項目で。価格は入れない
+const released = fmtDate(work.releasedAt) ? ymd(work.releasedAt) : null;
+const ld = {
+  '@context': 'https://schema.org',
+  '@type': 'CreativeWork',
+  name: work.title,
+  ...(released ? { datePublished: released } : {}),
+  ...(cover ? { image: cover } : {}),
+  url: new URL(Astro.url.pathname, Astro.site ?? Astro.url).href,
+};
+const ldJson = JSON.stringify(ld).replace(/</g, '\\u003c'); // </script> で途切れないようにする
+---
+
+<Base title={work.title} description={description} dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}>
+  <div class="work-page">
+    <nav class="crumb" aria-label="パンくずリスト">
+      {crumbs.map((c) => <><a href={c.href}>{c.label}</a> › </>)}
+      <span aria-current="page">{work.title}</span>
+    </nav>
+
+    <article class="stack">
+      <header class="work-head">
+        <h1>{work.title}</h1>
+        {castLine && <p class="muted">{castLine}</p>}
+      </header>
+
+      <div class="detail">
+        <div>
+          <div class:list={['thumb', 'wide', { 'work-cover': cover }]} style={cover ? undefined : frame}>
+            {cover && <img src={cover} alt="" loading="lazy" decoding="async" />}
+          </div>
+          {
+            work.derivedLabels.length > 0 && (
+              <div class="labels" style="margin-top: 8px">
+                {work.derivedLabels.map((l) => <span class:list={['label', { hot: HOT.has(l) }]}>{l}</span>)}
+              </div>
+            )
+          }
+        </div>
+        <div class="stack" style="gap: 16px">
+          {text && <p class="lead">{text}</p>}
+          <dl class="spec">
+            {rows.map((r) => <><dt>{r.label}</dt><dd>{r.value}</dd></>)}
+            {
+              price && (
+                <>
+                  <dt>価格</dt>
+                  <dd>
+                    <span class="price"><span class:list={{ sale: onSale }}>{price}</span></span>
+                    {onSale && <span class="muted">（通常<s>{yen(work.listPrice)}</s>）</span>}
+                  </dd>
+                </>
+              )
+            }
+          </dl>
+          {hasLink && <CtaButton id={work.contentId} />}
+          <AxisLinks actresses={work.actresses} series={work.series} makers={work.makers} genres={work.genres} />
+        </div>
+      </div>
+
+      <section>
+        <h2 style="margin-bottom: 8px">サンプル</h2>
+        <div class="stack" style="gap: 12px">
+          <SampleMovie movie={work.sampleMovie} title={work.title} />
+          <SampleGallery images={work.sampleImages} />
+        </div>
+      </section>
+
+      <AdSlot name="work-bottom" />
+
+      {
+        similar.length > 0 && (
+          <section>
+            <div class="section-head">
+              <h2>似た作品</h2>
+              <span class="muted">タグの重なりと同出演者・同シリーズで自動選定</span>
+            </div>
+            <div class="grid">{similar.map((s) => <WorkCard work={s} />)}</div>
+          </section>
+        )
+      }
+    </article>
+  </div>
+  <script is:inline type="application/ld+json" set:html={ldJson} />
+</Base>
+
+<style is:global>
+  /* is:global にする理由: scoped だと全要素に属性が付き、数千ページ分のHTMLが膨らむ。クラス名は .work- で始めて衝突を避ける */
+  .work-page .crumb, .work-head { overflow-wrap: anywhere; }
+  .work-head { display: grid; gap: 4px; }
+  .work-page h2 { font-size: 16px; }
+  /* 見出しの横に説明文が並ぶとき、狭い画面で見出しが「似た作/品」と折り返さないようにする */
+  .work-page .section-head h2 { flex: none; }
+  .work-page .section-head .muted { text-wrap: balance; }
+  /* パッケージ画像。枠の比率（3:2）は固定し、画像は切り取らずに全体を収める（加工は拡大縮小のみ） */
+  .thumb.work-cover { position: relative; padding: 0; background: var(--bg2); }
+  .thumb.work-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+</style>

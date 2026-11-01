@@ -1,0 +1,18 @@
+---
+// 出演者ページ（/actress/{id}/）。索引（catalog.byActress）のキーごとに1ページ作る。中身は軸ページ共通の AxisPage。
+import AxisPage from '../../components/AxisPage.astro';
+import { loadCatalog } from '../../lib/catalog.ts';
+
+export function getStaticPaths() {
+  const catalog = loadCatalog();
+  return [...catalog.byActress].map(([id, works]) => ({
+    params: { id },
+    props: { name: catalog.refNames.actress.get(id) ?? id, works },
+  }));
+}
+
+const { id } = Astro.params as { id: string };
+const { name, works } = Astro.props;
+---
+
+<AxisPage kind="actress" id={id} name={name} works={works} />

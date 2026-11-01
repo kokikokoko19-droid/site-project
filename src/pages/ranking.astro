@@ -1,0 +1,75 @@
+---
+// ランキング。meta.rankings の3種類（評価順・人気順・新着順）を各30件。
+// 切り替えはページ内アンカーのリンクだけで行う（JS不要）。
+import Base from '../layouts/Base.astro';
+import AdSlot from '../components/AdSlot.astro';
+import WorkGrid from '../components/WorkGrid.astro';
+import { loadCatalog } from '../lib/catalog.ts';
+import type { CatalogWork } from '../lib/catalog.ts';
+
+const COUNT = 30;
+const catalog = loadCatalog();
+const rankings = catalog.meta.rankings;
+
+/** ID の並びを作品に引き直して上位 COUNT 件にする。存在しない ID は飛ばす */
+function pick(ids: string[]): CatalogWork[] {
+  const out: CatalogWork[] = [];
+  for (const id of ids) {
+    const w = catalog.byId.get(id);
+    if (w) out.push(w);
+    if (out.length >= COUNT) break;
+  }
+  return out;
+}
+
+const tabs = rankings
+  ? [
+      { id: 'rating', label: '評価順', note: 'レビュー評価の高い順（レビュー件数が少ない作品は補正しています）', works: pick(rankings.byRating) },
+      { id: 'popularity', label: '人気順', note: '人気順位の高い順', works: pick(rankings.byPopularity) },
+      { id: 'recent', label: '新着順', note: '配信開始日の新しい順', works: pick(rankings.byRecent) },
+    ]
+  : [];
+---
+
+<Base
+  title="ランキング"
+  description="評価順・人気順・新着順の作品ランキングです。"
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  <section class="section">
+    <h1>ランキング</h1>
+  </section>
+
+  {
+    rankings === null ? (
+      <section class="section">
+        <div class="empty">
+          <h2>ただいま準備中です</h2>
+          <p class="muted">ランキングのデータができ次第、ここに並びます。</p>
+        </div>
+      </section>
+    ) : (
+      <>
+        <nav aria-label="ランキングの種類">
+          <div class="chips">
+            {tabs.map((t) => (
+              <a class="chip" href={`#${t.id}`}>{t.label}</a>
+            ))}
+          </div>
+        </nav>
+
+        {/* アンカーで飛んだとき、固定ヘッダーに見出しが隠れないよう停止位置をずらす（scroll-margin-top） */}
+        {tabs.map((t) => (
+          <section class="section" id={t.id} style="scroll-margin-top: 72px">
+            <div class="section-head">
+              <h2>{t.label}<span class="muted" style="margin-left: 8px">{t.note}</span></h2>
+            </div>
+            <WorkGrid works={t.works} empty="この順位の作品はまだありません。" />
+          </section>
+        ))}
+      </>
+    )
+  }
+
+  <AdSlot name="ranking-bottom" />
+</Base>

@@ -1,0 +1,42 @@
+---
+// 作品から各軸のページ（出演者・シリーズ・メーカー・ジャンル）へ回遊するためのリンク集。
+// URL は docs/02_設計方針.md の 2.1 に合わせる: /actress/{id}/ /series/{id}/ /maker/{id}/ /genre/{id}/
+// 見た目は mocks/ui.js の detail() の .axis-links と同じ（common.css）。
+import type { NamedRef } from '../data/types.ts';
+
+interface Props {
+  actresses?: NamedRef[];
+  series?: NamedRef[];
+  makers?: NamedRef[];
+  genres?: NamedRef[];
+}
+
+const { actresses = [], series = [], makers = [], genres = [] } = Astro.props;
+
+/** 軸の並び順は、出演者 → シリーズ → メーカー → ジャンル（モックと同じ）。id か名前が空の参照と、同じ軸内の重複は除く */
+const AXES: [string, NamedRef[]][] = [
+  ['actress', actresses],
+  ['series', series],
+  ['maker', makers],
+  ['genre', genres],
+];
+const links = AXES.flatMap(([axis, refs]) => {
+  const seen = new Set<string>();
+  const out: { href: string; name: string }[] = [];
+  for (const r of refs) {
+    const name = (r.name ?? '').trim();
+    if (!r.id || name === '' || seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push({ href: `/${axis}/${encodeURIComponent(r.id)}/`, name });
+  }
+  return out;
+});
+---
+
+{
+  links.length > 0 && (
+    <div class="axis-links" role="group" aria-label="この作品の出演者・シリーズ・メーカー・ジャンル">
+      {links.map((l) => <a href={l.href}>{l.name}</a>)}
+    </div>
+  )
+}

@@ -1,29 +1,124 @@
 ---
-// 仮のトップ。作品データの取り込みと探索UIができるまでの暫定の中身。
-// 本来の構成は docs/02_設計方針.md の 2.1（今日の発見、軸の入口、特集とハブ記事）と mocks/top.html。
+// トップ。構成は docs/02_設計方針.md の 2.1 と mocks/top.html に合わせる。
+// 運営者から／今日の発見／軸から探す／特集とガイド／新着／セール中
 import Base from '../layouts/Base.astro';
 import AdSlot from '../components/AdSlot.astro';
+import WorkGrid from '../components/WorkGrid.astro';
+import { loadCatalog } from '../lib/catalog.ts';
+
+const catalog = loadCatalog();
+
+// 今日の発見は meta.todays の3件。無ければ「高評価」ラベルの作品
+const todays = catalog.todays(3);
+const discoveries = todays.length > 0 ? todays : catalog.byLabel('高評価', 3);
+
+// 軸の入口。軸の一覧ページは無いので、件数と、作品数の多い12件を名前チップで出す
+const TOP_AXES = 12;
+const axes = [
+  { key: 'actress', label: '出演者', unit: '人', index: catalog.byActress, names: catalog.refNames.actress },
+  { key: 'series', label: 'シリーズ', unit: '件', index: catalog.bySeries, names: catalog.refNames.series },
+  { key: 'maker', label: 'メーカー', unit: '社', index: catalog.byMaker, names: catalog.refNames.maker },
+  { key: 'genre', label: 'ジャンル', unit: '種', index: catalog.byGenre, names: catalog.refNames.genre },
+].map((a) => ({
+  key: a.key,
+  label: a.label,
+  unit: a.unit,
+  total: a.index.size,
+  top: [...a.index]
+    .sort((x, y) => y[1].length - x[1].length) // 同数は索引に入った順（新しい作品側）のまま
+    .slice(0, TOP_AXES)
+    .map(([id, works]) => ({ id, name: a.names.get(id) ?? id, count: works.length })),
+}));
+
+// 特集とガイドは運営者が書く。ページができるまでは仮文で、リンク先は /guide/ 配下の予定
+const features = [
+  { title: '（特集タイトル 1）', text: '運営者が選んだ作品群と、その理由を書く場所です。' },
+  { title: '（特集タイトル 2）', text: '季節やセールに合わせて入れ替えます。' },
+];
+const guides = [
+  { title: 'このサイトの使い方', text: '探索ページの重みと絞り込みの考え方。' },
+  { title: 'はじめての1本の選び方', text: '「初見向け」ラベルの意味と選び方。' },
+  { title: '軸の解説', text: 'シリーズ追い、出演者追い、メーカーの作風。' },
+];
+// TODO: /guide/ 配下のページができたら、リンク先と「準備中」の表示を差し替える
+const GUIDE_HREF = '/about/#guide';
 ---
 
-<Base>
+<Base
+  description="出演者・シリーズ・メーカー・ジャンルの軸から作品を見て回る、カタログ型のサイトです。今日の発見、新着、セール中の作品も確認できます。"
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
   <section class="section">
     <div class="editorial">
       <div class="who">運営者から</div>
       <!-- TODO: 運営者が記入（今週見たもの、気づいたこと、サイトの使い方を数行で） -->
-      <p>
-        （ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。
-        自動生成ではなく、人の声が最初に目に入るようにします。）
-      </p>
+      <p>（ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。自動生成ではなく、人の声が最初に目に入るようにします。）</p>
     </div>
   </section>
 
   <section class="section">
-    <div class="empty">
-      <h2>ただいま準備中です</h2>
-      <p class="muted">
-        作品データの取り込みが済み次第、「今日の発見」「軸から探す」「特集とガイド」「新着」「セール中」がここに並びます。
-      </p>
+    <div class="section-head">
+      <h2>今日の発見<span class="muted" style="margin-left: 8px">評価と定番から選んだ作品</span></h2>
+      <a href="/explore/">もっと見る</a>
     </div>
+    <WorkGrid works={discoveries} empty="作品データを準備中です。" />
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>軸から探す</h2>
+      <a href="/explore/">探索ページへ</a>
+    </div>
+    <div class="entry">
+      {axes.map((a) => (
+        <a href="/explore/"><b>{a.label}</b><span>{a.total}{a.unit}</span></a>
+      ))}
+    </div>
+    <div style="display: grid; gap: 24px; margin-top: 24px">
+      {axes.filter((a) => a.top.length > 0).map((a) => (
+        <div style="display: grid; gap: 8px">
+          <h3>{a.label}<span class="muted" style="margin-left: 8px">作品数の多い順</span></h3>
+          <div class="chips">
+            {a.top.map((t) => (
+              <a class="chip" href={`/${a.key}/${t.id}/`}>{t.name}<span class="n">{t.count}</span></a>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>特集とガイド<span class="muted" style="margin-left: 8px">運営者が選び、運営者が書く</span></h2>
+    </div>
+    <div class="hub">
+      {features.map((f) => (
+        <a href={GUIDE_HREF}><span class="kind">特集 ・ 準備中</span><span class="title">{f.title}</span><span class="muted">{f.text}</span></a>
+      ))}
+    </div>
+    <div style="height: 16px"></div>
+    <div class="hub three">
+      {guides.map((g) => (
+        <a href={GUIDE_HREF}><span class="kind">ガイド ・ 準備中</span><span class="title">{g.title}</span><span class="muted">{g.text}</span></a>
+      ))}
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>新着<span class="muted" style="margin-left: 8px">直近の配信開始</span></h2>
+      <a href="/new/">もっと見る</a>
+    </div>
+    <WorkGrid works={catalog.recent(5)} empty="作品データを準備中です。" />
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>セール中<span class="muted" style="margin-left: 8px">期間限定</span></h2>
+      <a href="/sale/">もっと見る</a>
+    </div>
+    <WorkGrid works={catalog.onSale(5)} empty="現在セール中の作品はありません。" />
   </section>
 
   <AdSlot name="top-bottom" />

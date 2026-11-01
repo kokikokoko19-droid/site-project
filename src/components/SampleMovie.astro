@@ -1,0 +1,90 @@
+---
+// サンプル動画（公式の埋め込みプレーヤー）。docs/05_技術調査_動画埋め込み.md の結論に従い、
+// API の sampleMovieURL（sizes）をそのまま iframe で使う。手組みのURLは使わない。
+// 初期HTMLには iframe を出さない。最初は枠とボタンだけを出し、押されたときに iframe を差し込む
+// （公式プレーヤーの読み込みを再生時まで遅らせ、初期表示を軽く保つため）。
+// 動画が無い作品（sampleMovie が null）では何も出さない。
+import type { SampleMovie } from '../data/types.ts';
+
+interface Props {
+  movie?: SampleMovie | null;
+  /** iframe の title（読み上げ用）に使う作品名 */
+  title?: string;
+}
+
+const { movie = null, title = '' } = Astro.props;
+
+/** 使うサイズの優先順。大きいものから（先に見つかったものを採る） */
+const SIZE_KEYS = ['size_720_480', 'size_644_414', 'size_560_360', 'size_476_306'] as const;
+// https 以外（http や javascript: など）は埋め込まない。ページが https なので http は混在コンテンツになる
+const key = SIZE_KEYS.find((k) => /^https:\/\//.test(movie?.sizes?.[k] ?? ''));
+const src = key ? movie!.sizes[key] : null;
+const frameTitle = title ? `${title}のサンプル動画` : 'サンプル動画';
+
+// 再生ボタンのクリックで iframe を差し込む小さなスクリプト（HTML にそのまま埋め込む）。
+// ページに複数あっても登録は1回だけで、クリックはイベント委任で拾う。差し込み済みなら何もしない。
+const PLAYER_SCRIPT = `(function () {
+  if (window.__sampleMovieBound) return;
+  window.__sampleMovieBound = true;
+  document.addEventListener('click', function (e) {
+    var el = e.target;
+    var btn = el && el.closest && el.closest('[data-sample-play]');
+    if (!btn) return;
+    var box = btn.closest('[data-sample-movie]');
+    if (!box || box.querySelector('iframe')) return;
+    var src = box.getAttribute('data-src') || '';
+    if (src.indexOf('https://') !== 0) return;
+    var frame = document.createElement('iframe');
+    frame.src = src;
+    frame.title = box.getAttribute('data-title') || 'サンプル動画';
+    frame.setAttribute('allowfullscreen', '');
+    frame.setAttribute('loading', 'lazy');
+    frame.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
+    box.textContent = '';
+    box.classList.add('is-playing');
+    box.appendChild(frame);
+    frame.focus();
+  });
+})();`;
+---
+
+{
+  src && (
+    <div class="video" data-sample-movie data-src={src} data-title={frameTitle}>
+      <button class="btn" type="button" data-sample-play>サンプル動画を再生</button>
+      <span class="muted">再生すると、公式の動画プレーヤー（DMM.com）を読み込みます。</span>
+    </div>
+  )
+}
+{src && <script is:inline set:html={PLAYER_SCRIPT} />}
+
+<style is:global>
+  /* is:global にする理由: 全要素に属性が付くのを避ける。data-sample-movie はこの部品でしか使わない。
+     公式プレーヤーの主なサイズ（720x480 など）は 3:2 に近いので、差し込みの前後で高さが変わらないよう枠も 3:2 にする。
+     幅の上限は最大サイズの 720px（それ以上に広げるとぼやける） */
+  .video[data-sample-movie] {
+    position: relative;
+    width: 100%;
+    max-width: 720px;
+    aspect-ratio: 3 / 2;
+    gap: calc(var(--sp) * 1.5);
+    padding: 0 calc(var(--sp) * 2);
+    overflow: hidden;
+    text-align: center;
+  }
+  .video[data-sample-movie].is-playing {
+    display: block;
+    padding: 0;
+    background: #000;
+  }
+  .video[data-sample-movie].is-playing::before {
+    content: none;
+  }
+  .video[data-sample-movie] iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+</style>

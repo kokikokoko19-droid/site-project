@@ -1,0 +1,135 @@
+---
+// 軸ページ（出演者・シリーズ・メーカー・ジャンル）共通の本体。
+// works は配信開始日の降順で渡される前提（catalog の索引がその順）。先頭60件だけ並べ、残りは探索ページへ誘導する。
+import Base from '../layouts/Base.astro';
+import AdSlot from './AdSlot.astro';
+import WorkGrid from './WorkGrid.astro';
+import { loadCatalog } from '../lib/catalog.ts';
+import type { CatalogWork } from '../lib/catalog.ts';
+
+type Kind = 'actress' | 'series' | 'maker' | 'genre';
+
+interface Props {
+  kind: Kind;
+  id: string;
+  name: string;
+  works: CatalogWork[];
+}
+
+const { kind, id, name, works } = Astro.props;
+const catalog = loadCatalog();
+
+const MAX_WORKS = 60; // 軸ページに並べる作品の上限
+const MAX_RELATED = 8; // 関連する軸の各グループの上限
+
+// 軸ごとの表示名と、探索ページのクエリのキー（値は名前）。ページのパスは kind と同じ（/actress/ など）
+const LABEL: Record<Kind, string> = { actress: '出演者', series: 'シリーズ', maker: 'メーカー', genre: 'ジャンル' };
+const QUERY: Record<Kind, string> = { actress: 'act', series: 'ser', maker: 'mak', genre: 'g' };
+const PICK: Record<Kind, (w: CatalogWork) => { id: string; name: string }[]> = {
+  actress: (w) => w.actresses,
+  series: (w) => w.series,
+  maker: (w) => w.makers,
+  genre: (w) => w.genres,
+};
+
+type Item = { id: string; name: string; count: number };
+type Group = { title: string; kind: Kind; items: Item[] };
+
+/** list の作品に付いた kind の参照を、作品数の多い順に上位 n 件返す（exclude の id は除く）。同数は先に現れた順（新しい作品側） */
+function top(list: CatalogWork[], target: Kind, n: number, exclude?: string): Item[] {
+  const counts = new Map<string, number>();
+  for (const w of list) {
+    const seen = new Set<string>();
+    for (const r of PICK[target](w)) {
+      if (!r.id || r.id === exclude || seen.has(r.id)) continue;
+      seen.add(r.id);
+      counts.set(r.id, (counts.get(r.id) ?? 0) + 1);
+    }
+  }
+  return [...counts]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([rid, count]) => ({ id: rid, name: catalog.refNames[target].get(rid) ?? rid, count }));
+}
+
+/** 関連する軸。軸ごとに何を並べるかはここで決める */
+function relatedGroups(): Group[] {
+  const groups: Group[] = [];
+  if (kind === 'actress') {
+    groups.push({ title: '共演の多い出演者', kind: 'actress', items: top(works, 'actress', MAX_RELATED, id) });
+  } else if (kind === 'series') {
+    const makers = top(works, 'maker', MAX_RELATED);
+    // 同じメーカーの作品を集めて、他のシリーズを数える（複数のメーカーに渡るときは和集合）
+    const seen = new Set<string>();
+    const sameMaker: CatalogWork[] = [];
+    for (const m of makers) {
+      for (const w of catalog.byMaker.get(m.id) ?? []) {
+        if (!seen.has(w.contentId)) { seen.add(w.contentId); sameMaker.push(w); }
+      }
+    }
+    groups.push({ title: 'メーカー', kind: 'maker', items: makers });
+    groups.push({ title: '同じメーカーの他のシリーズ', kind: 'series', items: top(sameMaker, 'series', MAX_RELATED, id) });
+  } else if (kind === 'maker') {
+    groups.push({ title: '所属シリーズ', kind: 'series', items: top(works, 'series', MAX_RELATED) });
+    groups.push({ title: 'ジャンルの分布', kind: 'genre', items: top(works, 'genre', MAX_RELATED) });
+  } else {
+    groups.push({ title: '同時に付くことが多いジャンル', kind: 'genre', items: top(works, 'genre', MAX_RELATED, id) });
+  }
+  return groups.filter((g) => g.items.length > 0);
+}
+
+const label = LABEL[kind];
+const total = works.length;
+const shown = works.slice(0, MAX_WORKS);
+const exploreHref = `/explore/?${QUERY[kind]}=${encodeURIComponent(name)}`;
+const groups = relatedGroups();
+---
+
+<Base
+  title={`${name}（${label}）`}
+  description={`${label}「${name}」の作品${total}件を、配信開始日の新しい順に並べています。`}
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  <nav class="crumb" aria-label="パンくず">
+    <a href="/">トップ</a><span aria-hidden="true"> / </span><a href="/explore/">探索</a><span aria-hidden="true"> / </span><span aria-current="page">{label}: {name}</span>
+  </nav>
+
+  <section class="section" style="margin-top: 16px">
+    <div class="muted">{label}</div>
+    <h1>{name}</h1>
+    <p class="muted">作品 {total}件（配信開始日の新しい順）</p>
+  </section>
+
+  <section class="section">
+    <WorkGrid works={shown} empty="この軸に該当する作品はまだありません。" />
+    {
+      total > MAX_WORKS && (
+        <p style="margin-top: 16px">
+          <a class="btn" href={exploreHref}>探索ページで全件を見る（{total}件）</a>
+        </p>
+      )
+    }
+  </section>
+
+  {
+    groups.length > 0 && (
+      <section class="section">
+        <div class="section-head"><h2>関連する軸</h2></div>
+        <div style="display: grid; gap: 24px">
+          {groups.map((g) => (
+            <div style="display: grid; gap: 8px">
+              <h3>{g.title}</h3>
+              <div class="chips">
+                {g.items.map((it) => (
+                  <a class="chip" href={`/${g.kind}/${it.id}/`}>{it.name}<span class="n">{it.count}</span></a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  <AdSlot name="axis-bottom" />
+</Base>

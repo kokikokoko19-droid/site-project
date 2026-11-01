@@ -1,0 +1,19 @@
+---
+// 作品ごとの外部リンクボタン（FANZAへの誘導）。
+// リンク先は中継ページ /go/{id}/ で、そこから公式のアフィリエイトURLへ移動する。
+// /go/{id}/ は affiliateUrl がある作品にしか作られないので、呼び出し側で affiliateUrl の有無を見て出し分けること。
+// 全ページに「PR」表記が必要なため、ボタンの中にも小さく「PR」を添える。
+interface Props {
+  /** 作品ID（content_id） */
+  id: string;
+  /** ボタンの本文。省略時は「FANZAで見る」 */
+  label?: string;
+  /** 横幅いっぱいにする（既定: する） */
+  block?: boolean;
+}
+
+const { id, label = 'FANZAで見る', block = true } = Astro.props;
+---
+
+{/* data-cta は計測用の目印（クリック計測は後で差し込む）。広告リンクなので rel は sponsored nofollow */}
+<a class:list={['btn', 'btn-cta', { 'btn-block': block }]} href={`/go/${id}/`} rel="sponsored nofollow" data-cta="work">{label} <small>PR</small></a>

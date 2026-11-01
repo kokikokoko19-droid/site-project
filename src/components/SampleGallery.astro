@@ -1,0 +1,38 @@
+---
+// サンプル画像（公式配信の直リンク）。枠は mocks/ui.js の .gallery と同じ（common.css の .gallery div が 4:3 の枠）。
+// 規約により加工は拡大縮小のみ。切り取りはせず、枠の中に全体を収める（object-fit: contain）。
+interface Props {
+  /** サンプル画像のURL（API の sampleImages）。0件なら案内文を出す */
+  images?: string[];
+}
+
+const { images = [] } = Astro.props;
+// 空文字などの無効な値は飛ばす
+const urls = images.filter((u) => typeof u === 'string' && u.trim() !== '');
+---
+
+{
+  urls.length === 0 ? (
+    <p class="muted">サンプル画像はありません。</p>
+  ) : (
+    <div class="gallery">
+      {urls.map((src, i) => (
+        <div>
+          <img src={src} alt={`サンプル画像 ${i + 1}`} loading="lazy" decoding="async" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+<style is:global>
+  /* is:global にする理由: scoped だと全要素に属性が付き、数千ページ分のHTMLが膨らむ。
+     .gallery は作品ページのサンプル画像でしか使わない */
+  .gallery img {
+    max-width: 100%;
+    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+</style>

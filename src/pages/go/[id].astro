@@ -1,0 +1,45 @@
+---
+// 外部リンクの中継ページ /go/{content_id}/。作品ページのボタンから飛び、公式のアフィリエイトURLへ移動する。
+// 軽量にするため Base は使わない。年齢確認もここには無い（移動先の FANZA 側で年齢確認される）。検索には載せない。
+// クリック計測は後で差し込めるよう、body に data-go（作品ID）を付けてある。
+import { loadCatalog } from '../../lib/catalog.ts';
+
+// affiliateUrl が無い（null）作品と、http(s) 以外のURL（javascript: など）はページを作らない。
+// 作品ページがボタンを出す条件（v/[id].astro の hasLink）と同じにしてある
+export function getStaticPaths() {
+  return loadCatalog()
+    .works.filter((w) => typeof w.affiliateUrl === 'string' && /^https?:\/\//.test(w.affiliateUrl))
+    .map((w) => ({ params: { id: w.contentId }, props: { url: w.affiliateUrl as string } }));
+}
+
+const { id } = Astro.params;
+const { url } = Astro.props;
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="robots" content="noindex,nofollow" />
+    {/* JS が無効でも移動できるよう、meta refresh を主にし、スクリプトでも移動する */}
+    <meta http-equiv="refresh" content={`0;url=${url}`} />
+    <title>FANZAへ移動しています</title>
+    {/* 軽量にするため、共通CSSは読まず最小限の指定だけを埋め込む（色は tokens.css と同じ） */}
+    <style is:inline>
+      body { margin: 0; padding: 32px 16px; background: #121316; color: #f2f2f0; font: 15px/1.7 -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif; }
+      p { margin: 0 0 12px; }
+      small { color: #b9bcc3; font-size: 12.5px; }
+      a { color: #d9a441; text-decoration: underline; }
+    </style>
+  </head>
+  <body data-go={id}>
+    <p>FANZAへ移動しています（PR）</p>
+    <p><small>自動で移動しない場合は、<a href={url} rel="sponsored nofollow">こちら</a>から進んでください。</small></p>
+    {/* 計測を入れる場合は、移動の直前（replace の前）に送る */}
+    <script is:inline define:vars={{ url }}>
+      window.location.replace(url);
+    </script>
+  </body>
+</html>
