@@ -6,9 +6,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { DerivedLabel, NamedRef, Work } from '../data/types.ts';
+import { outboundUrl, rewriteAffiliateId, siteAffiliateId } from './links.ts';
 
 /** works.json の1件と同じ形（Work に、派生ラベルと似た作品のID（近い順）を付けたもの） */
-export type CatalogWork = Work & { derivedLabels: DerivedLabel[]; similarIds: string[] };
+/** outboundUrl は「FANZAで見る」の移動先（links.ts の outboundUrl。null ならボタンを出さない）。読み込み時に計算する */
+export type CatalogWork = Work & { derivedLabels: DerivedLabel[]; similarIds: string[]; outboundUrl: string | null };
 
 export type CatalogMeta = {
   rankings: { byRating: string[]; byRecent: string[]; byPopularity: string[] } | null;
@@ -157,6 +159,14 @@ function toWork(raw: unknown, i: number): CatalogWork {
   }
   const w: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
   for (const key of ARRAY_KEYS) if (!Array.isArray(w[key])) w[key] = [];
+  // サイト用IDが設定されていれば、アフィリエイトURLとサンプル動画URLのIDを差し替える（未設定なら無変更）
+  const siteId = siteAffiliateId();
+  if (typeof w.affiliateUrl === 'string') w.affiliateUrl = rewriteAffiliateId(w.affiliateUrl, siteId);
+  const sm = w.sampleMovie as { sizes?: Record<string, string> } | null | undefined;
+  if (sm && typeof sm === 'object' && sm.sizes && typeof sm.sizes === 'object') {
+    w.sampleMovie = { ...sm, sizes: Object.fromEntries(Object.entries(sm.sizes).map(([k, u]) => [k, typeof u === 'string' ? rewriteAffiliateId(u, siteId) : u])) };
+  }
+  w.outboundUrl = outboundUrl({ affiliateUrl: str(w.affiliateUrl), url: str(w.url) });
   return w as unknown as CatalogWork;
 }
 

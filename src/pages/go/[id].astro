@@ -3,13 +3,16 @@
 // 軽量にするため Base は使わない。年齢確認もここには無い（移動先の FANZA 側で年齢確認される）。検索には載せない。
 // クリック計測は後で差し込めるよう、body に data-go（作品ID）を付けてある。
 import { loadCatalog } from '../../lib/catalog.ts';
+import { outboundUrl } from '../../lib/links.ts';
 
-// affiliateUrl が無い（null）作品と、http(s) 以外のURL（javascript: など）はページを作らない。
-// 作品ページがボタンを出す条件（v/[id].astro の hasLink）と同じにしてある
+// 移動先は outboundUrl(work)。AFFILIATE_LINKS=off（既定）では公式の商品ページ、on ではアフィリエイトURL。
+// 移動先が無い（null）作品はページを作らない。作品ページ等のボタンも work.outboundUrl で同じ条件にする
 export function getStaticPaths() {
   return loadCatalog()
-    .works.filter((w) => typeof w.affiliateUrl === 'string' && /^https?:\/\//.test(w.affiliateUrl))
-    .map((w) => ({ params: { id: w.contentId }, props: { url: w.affiliateUrl as string } }));
+    .works.flatMap((w) => {
+      const url = outboundUrl(w);
+      return url ? [{ params: { id: w.contentId }, props: { url } }] : [];
+    });
 }
 
 const { id } = Astro.params;
