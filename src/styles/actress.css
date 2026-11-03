@@ -1,0 +1,26 @@
+/* 出演者ページ・出演者ランキング用。色や余白は tokens.css の変数を使う */
+.toc { border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg1); padding: calc(var(--sp) * 2); margin-block: calc(var(--sp) * 2); }
+.toc-title { font-weight: 600; margin: 0 0 var(--sp); }
+.toc ol { margin: 0; padding-left: 1.4em; display: grid; gap: 2px; }
+.toc a { display: inline-block; min-height: 32px; line-height: 32px; }
+.actress-page .section > [id], .actress-page section[id] { scroll-margin-top: 72px; }
+.profile-table { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 16px; margin: 0; }
+.profile-table dt { color: var(--fg2); }
+.profile-table dd { margin: 0; overflow-wrap: anywhere; }
+.rank-list { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(var(--sp) * 3); grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 640px) { .rank-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.rank-item { display: grid; gap: var(--sp); align-content: start; min-width: 0; }
+.rank-head { display: flex; align-items: center; gap: 12px; }
+.rank-no { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; height: 36px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; }
+.rank-stat, .rank-labels { margin: 0; }
+.rank-actions { display: flex; flex-wrap: wrap; gap: var(--sp); }
+.rank-table { width: 100%; border-collapse: collapse; }
+.rank-table th, .rank-table td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.rank-table-wrap { overflow-x: auto; }
+@media (max-width: 639px) {
+  .rank-table thead { display: none; }
+  .rank-table, .rank-table tbody, .rank-table tr, .rank-table td { display: block; }
+  .rank-table tr { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .rank-table td { border: 0; padding: 2px 8px; overflow-wrap: anywhere; }
+  .rank-table td::before { content: attr(data-label) "："; color: var(--fg2); }
+}

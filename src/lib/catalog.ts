@@ -18,6 +18,13 @@ export type CatalogMeta = {
   generatedAt: string | null;
 };
 
+/** 出演者プロフィール（ActressSearch API 由来。顔写真のURLは持たない）。src/data/types.ts の同名型と同じ形 */
+export type ActressProfile = {
+  id: string; name: string; ruby: string | null; birthday: string | null; bloodType: string | null;
+  hobby: string | null; prefectures: string | null; height: number | null; bust: number | null;
+  waist: number | null; hip: number | null; cup: string | null; listUrl: string | null; fetchedAt: string | null;
+};
+
 /** 索引のキーは各 NamedRef の id。値は配信開始日の降順（同じ日は時刻の降順。日付なしは末尾） */
 export type Catalog = {
   works: CatalogWork[];
@@ -29,6 +36,8 @@ export type Catalog = {
   /** id から名前を引く表（同じ id の名前が違うときは、より新しい作品のものを採る） */
   refNames: { actress: Map<string, string>; series: Map<string, string>; maker: Map<string, string>; genre: Map<string, string> };
   meta: CatalogMeta;
+  /** 出演者プロフィール（actresses.json が無ければ空） */
+  actressProfiles: Map<string, ActressProfile>;
   recent(n: number): CatalogWork[];
   onSale(n?: number): CatalogWork[];
   byLabel(label: DerivedLabel, n?: number): CatalogWork[];
@@ -109,7 +118,7 @@ export function buildCatalog(input: CatalogWork[], meta: Partial<CatalogMeta> = 
   };
   const byLabel = (label: DerivedLabel, n?: number): CatalogWork[] => take(labelIndex.get(label) ?? [], n);
   return {
-    works, byId, byActress, bySeries, byMaker, byGenre, refNames, meta: full,
+    works, byId, byActress, bySeries, byMaker, byGenre, refNames, meta: full, actressProfiles: new Map(),
     recent: (n) => take(sorted, n),
     onSale: (n) => byLabel('セール中', n),
     byLabel,
@@ -151,6 +160,28 @@ function toWork(raw: unknown, i: number): CatalogWork {
   return w as unknown as CatalogWork;
 }
 
+const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null);
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/** actresses.json（任意）を読む。無い・壊れているときは空 Map（プロフィールなしで動く） */
+function readProfiles(dir: string): Map<string, ActressProfile> {
+  const out = new Map<string, ActressProfile>();
+  if (!existsSync(join(dir, 'actresses.json'))) return out;
+  try {
+    const raw = JSON.parse(readFileSync(join(dir, 'actresses.json'), 'utf8'));
+    for (const r of Array.isArray(raw) ? raw : []) {
+      const id = str(r?.id), name = str(r?.name);
+      if (!id || !name) continue;
+      out.set(id, {
+        id, name, ruby: str(r.ruby), birthday: str(r.birthday), bloodType: str(r.bloodType), hobby: str(r.hobby),
+        prefectures: str(r.prefectures), height: num(r.height), bust: num(r.bust), waist: num(r.waist), hip: num(r.hip),
+        cup: str(r.cup), listUrl: str(r.listUrl), fetchedAt: str(r.fetchedAt),
+      });
+    }
+  } catch { /* 壊れていても出演者ページは作れるので無視する */ }
+  return out;
+}
+
 /**
  * data/export の works.json・meta.json・index.json を読んでカタログにする。
  * 出力先は opts.exportDir、無ければ環境変数 EXPORT_DIR、無ければ data/export（相対パスは process.cwd() 基準）。
@@ -179,6 +210,7 @@ export function loadCatalog(opts: { exportDir?: string; force?: boolean } = {}):
     lastDeriveAt: asString(m.last_derive_at),
     generatedAt: asString(index?.generatedAt),
   });
+  catalog.actressProfiles = readProfiles(dir);
   cache.set(dir, catalog);
   return catalog;
 }

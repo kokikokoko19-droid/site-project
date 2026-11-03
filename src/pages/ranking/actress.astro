@@ -1,0 +1,64 @@
+---
+// 出演者ランキング（/ranking/actress/）。ベイズ平均の高い順に上位50人。順位は機械的に決める。
+import '../../styles/actress.css';
+import Base from '../../layouts/Base.astro';
+import AdSlot from '../../components/AdSlot.astro';
+import { loadCatalog } from '../../lib/catalog.ts';
+import { actressStats, rankActresses, globalMeanAvg, workBayes } from '../../lib/actress-stats.ts';
+
+const catalog = loadCatalog();
+const meanAvg = globalMeanAvg(catalog);
+const ranked = rankActresses(actressStats(catalog)).slice(0, 50);
+
+// 代表作: その出演者の作品のうちベイズ平均が最も高い1件
+const rows = ranked.map((s) => {
+  const works = catalog.byActress.get(s.id) ?? [];
+  const best = works.slice().sort((a, b) => workBayes(b, meanAvg) - workBayes(a, meanAvg))[0] ?? null;
+  return { s, best };
+});
+---
+
+<Base
+  title="出演者ランキング｜評価と作品数で見る"
+  description="レビューの平均と件数、作品数から機械的に順位を付けた出演者ランキングです。"
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  <section class="section">
+    <h1>出演者ランキング</h1>
+    <div class="editorial">
+      <!-- TODO: 運営者が記入 -->
+      <p class="muted">運営者による導入文をここに入れます。</p>
+    </div>
+    <p class="muted">作品3件以上の出演者を、レビュー平均を件数で補正した値（ベイズ平均）の高い順に並べています。</p>
+  </section>
+
+  <section class="section">
+    {
+      rows.length === 0 ? (
+        <div class="empty"><p>ランキングの対象になる出演者がまだいません。</p></div>
+      ) : (
+        <div class="rank-table-wrap">
+          <table class="rank-table">
+            <thead>
+              <tr><th>順位</th><th>出演者</th><th>作品数</th><th>平均評価</th><th>レビュー総数</th><th>代表作</th></tr>
+            </thead>
+            <tbody>
+              {rows.map(({ s, best }, i) => (
+                <tr>
+                  <td data-label="順位">{i + 1}</td>
+                  <td data-label="出演者"><a href={`/actress/${s.id}/`}>{s.name}</a></td>
+                  <td data-label="作品数">{s.works}件</td>
+                  <td data-label="平均評価">{s.reviewAvg !== null ? s.reviewAvg.toFixed(2) : '-'}</td>
+                  <td data-label="レビュー総数">{s.reviewTotal}件</td>
+                  <td data-label="代表作">{best ? <a href={`/v/${best.contentId}/`}>{best.title}</a> : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </section>
+
+  <AdSlot name="ranking-actress-bottom" />
+</Base>

@@ -1,0 +1,40 @@
+---
+// 出演者のプロフィール表。値がある行だけ出す。顔写真など画像は出さない（規約）。
+import type { ActressProfile } from '../lib/catalog.ts';
+import { fmtDate } from '../lib/format.ts';
+
+interface Props {
+  profile: ActressProfile | null;
+}
+
+const { profile } = Astro.props;
+
+const p = profile;
+const size = p ? [p.bust !== null ? `B${p.bust}` : '', p.cup ? `（${p.cup}カップ）` : '', p.waist !== null ? ` W${p.waist}` : '', p.hip !== null ? ` H${p.hip}` : ''].join('').trim() : '';
+const rows: [string, string][] = p
+  ? ([
+      ['ふりがな', p.ruby ?? ''],
+      ['生年月日', fmtDate(p.birthday) || (p.birthday ?? '')],
+      ['血液型', p.bloodType ? `${p.bloodType}型` : ''],
+      ['出身', p.prefectures ?? ''],
+      ['趣味', p.hobby ?? ''],
+      ['身長', p.height !== null ? `${p.height}cm` : ''],
+      ['サイズ', size],
+    ] as [string, string][]).filter(([, v]) => v !== '')
+  : [];
+---
+
+{
+  rows.length > 0 ? (
+    <dl class="profile-table">
+      {rows.map(([k, v]) => (
+        <>
+          <dt>{k}</dt>
+          <dd>{v}</dd>
+        </>
+      ))}
+    </dl>
+  ) : (
+    <p class="muted">プロフィールは準備中です。</p>
+  )
+}
