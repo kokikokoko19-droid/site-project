@@ -93,6 +93,7 @@ export type WorkCardRecord = {
   img: string | null;     // imageSmall
   rk: number | null;      // rankPosition
   lb: DerivedLabel[];     // 派生ラベル
+  ob: boolean;            // 外部リンク先（アフィリエイトURLか公式URL）があるか。/go/ の有無と一致
 };
 
 /**

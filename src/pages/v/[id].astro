@@ -65,8 +65,8 @@ const rows = [
 const price = yen(work.priceMin);
 const onSale = work.derivedLabels.includes('セール中') && work.listPrice !== null && work.priceMin !== null && work.listPrice > work.priceMin;
 
-// /go/{id}/ は affiliateUrl が http(s) の作品にしか作られない（go/[id].astro と同じ条件）。無い作品にはボタンを出さない
-const hasLink = typeof work.affiliateUrl === 'string' && /^https?:\/\//.test(work.affiliateUrl);
+// /go/{id}/ は outboundUrl がある作品にしか作られない（go/[id].astro と同じ条件）。無い作品にはボタンを出さない
+const hasLink = typeof work.outboundUrl === 'string' && work.outboundUrl.length > 0;
 
 const similar = catalog.similar(work, 8).map((s) => ({
   id: s.contentId, title: s.title, imageSmall: s.imageSmall, actresses: names(s.actresses),

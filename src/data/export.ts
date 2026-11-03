@@ -34,6 +34,7 @@ export function toCardRecord(work: Work, labels: DerivedLabel[]): WorkCardRecord
     img: work.imageSmall,
     rk: work.rankPosition,
     lb: [...labels],
+    ob: /^https?:\/\//.test(work.affiliateUrl ?? '') || /^https?:\/\//.test(work.url ?? ''),
   };
 }
 

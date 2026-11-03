@@ -43,7 +43,7 @@ test('toCardRecord: 項目の対応（d は日付10文字、sale と sm は真�
   });
   assert.deepEqual(toCardRecord(w, ['セール中', '新作']), {
     id: 'w00001', t: '作品 00001', a: ['出演者A', '出演者B'], m: 'メーカーA', s: 'シリーズA', g: ['タグ01', 'タグ02'], v: 90, d: '2026-01-01',
-    rc: 7, ra: 4.2, p: 500, lp: 800, sale: true, sm: true, img: 'https://example.invalid/s.jpg', rk: 5, lb: ['セール中', '新作'],
+    rc: 7, ra: 4.2, p: 500, lp: 800, sale: true, sm: true, img: 'https://example.invalid/s.jpg', rk: 5, lb: ['セール中', '新作'], ob: false,
   });
   const bare = toCardRecord(makeWork(2, { releasedAt: null }), []);
   assert.deepEqual([bare.d, bare.m, bare.s, bare.sale, bare.sm, bare.a], [null, null, null, false, false, []]);

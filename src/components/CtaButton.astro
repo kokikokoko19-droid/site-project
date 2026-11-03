@@ -1,7 +1,7 @@
 ---
 // 作品ごとの外部リンクボタン（FANZAへの誘導）。
 // リンク先は中継ページ /go/{id}/ で、そこから公式のアフィリエイトURLへ移動する。
-// /go/{id}/ は affiliateUrl がある作品にしか作られないので、呼び出し側で affiliateUrl の有無を見て出し分けること。
+// /go/{id}/ は outboundUrl がある作品にしか作られないので、呼び出し側で outboundUrl の有無を見て出し分けること。
 // 全ページに「PR」表記が必要なため、ボタンの中にも小さく「PR」を添える。
 interface Props {
   /** 作品ID（content_id） */

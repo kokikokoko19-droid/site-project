@@ -125,7 +125,7 @@ const score = (n: number) => n.toFixed(2);
             )}
             <div class="rank-actions">
               <a class="btn" href={`/v/${t.w.contentId}/`}>作品ページを見る</a>
-              {t.w.affiliateUrl && (
+              {t.w.outboundUrl && (
                 <a class="btn btn-cta" href={`/go/${t.w.contentId}/`} rel="sponsored nofollow" data-cta="work">FANZAで見る <small>PR</small></a>
               )}
             </div>
