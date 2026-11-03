@@ -17,7 +17,7 @@ const oneDay = ['2026-10-01T00:00:00', '2026-10-01T23:59:59'] as const;
 
 // respond の返す内容を、実応答と同じ外枠（request に API ID が入る）の ItemList 応答にして返すクライアント。
 // 呼ばれた URL を urls に記録する。items を省くと、実 API の 0 件と同じく items のキー自体が欠落する。
-function setup(respond: (q: URLSearchParams) => Reply) {
+function setup(respond: (q: URLSearchParams) => Reply, maxOffset?: number) {
   const urls: URL[] = [];
   const fetchImpl = (async (input: string | URL | Request) => {
     const url = new URL(String(input));
@@ -29,7 +29,7 @@ function setup(respond: (q: URLSearchParams) => Reply) {
     };
     return new Response(JSON.stringify({ request: { parameters: { api_id: 'TEST_API_ID_DUMMY' } }, result }));
   }) as typeof fetch;
-  return { client: createClient({ ...CLIENT_OPTS, fetchImpl }), urls };
+  return { client: createClient({ ...CLIENT_OPTS, maxOffset, fetchImpl }), urls };
 }
 // total 件のうち、リクエストの offset から hits 件ぶんの合成 item。content_id は「並び順＋窓の始点＋位置」で窓ごとに重ならない。
 function pageItems(q: URLSearchParams, total: number): Item[] {
@@ -111,7 +111,7 @@ test('ingestWindow: 1日以下の窓は分割せず、offset が上限 5000 を�
 });
 
 test('ingestWindow: maxOffset に 50000 を渡せば旧挙動（total 6000 は分割せず1窓で取り切る）', async () => {
-  const { client, urls } = setup(standard(6000));
+  const { client, urls } = setup(standard(6000), 50000);
   const infos: IngestProgress[] = [];
   const r = await ingestWindow(client, openDb(':memory:'), {
     gteDate: '2026-10-01T00:00:00', lteDate: '2026-10-31T23:59:59', maxOffset: 50000, onProgress: (i) => infos.push(i),
@@ -120,7 +120,7 @@ test('ingestWindow: maxOffset に 50000 を渡せば旧挙動（total 6000 は�
   assert.equal(urls.length, 60);
   assert.ok(!infos.some((i) => i.kind === 'split'));
   // 1日窓で total 60000 なら、旧上限どおり 50000 件（offset 49901 まで）
-  const old = setup(standard(60000));
+  const old = setup(standard(60000), 50000);
   const r2 = await ingestWindow(old.client, openDb(':memory:'), { gteDate: oneDay[0], lteDate: oneDay[1], maxOffset: 50000 });
   assert.equal(offsetsOf(old.urls).at(-1), 49901);
   assert.equal(r2.fetched, 50000);

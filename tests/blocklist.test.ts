@@ -77,7 +77,7 @@ test('exportAll: contentId 指定の作品が works.json・チャンク・meta�
 
 test('exportAll: 出演者 id 指定で、その出演者が出る作品がすべて消え、actresses.json からも外れる', () => withDir((dir) => {
   const db = setupDb();
-  const profile = (id: string) => ({ id, name: `出演者${id}`, ruby: null, birthday: null, bloodType: null, hobby: null, prefectures: null, height: null, bust: null, waist: null, hip: null, cup: null } as never);
+  const profile = (id: string) => ({ id, name: `出演者${id}`, ruby: null, birthday: null, bloodType: null, hobby: null, prefectures: null, fetchedAt: FETCHED, height: null, bust: null, waist: null, hip: null, cup: null } as never);
   db.upsertActressProfiles([profile('11'), profile('13')]);
   const r = exportAll(db, dir, { now: NOW, blocklist: bl({ actressIds: ['11'] }) });
   assert.deepEqual(r, { works: 2, chunks: 1, blocked: 2 });

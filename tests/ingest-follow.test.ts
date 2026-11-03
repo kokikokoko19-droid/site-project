@@ -11,7 +11,7 @@ import { ingestFollowed, loadFollowConfig, parseFollowConfig } from '../src/data
 const CLIENT_OPTS = { apiId: 'TEST_API_ID_DUMMY', affiliateId: 'testaff-990', minIntervalMs: 0, maxRetries: 0, sleep: async () => {} };
 
 // 軸ごとに total 件ある合成の応答。content_id は article と article_id と位置で一意
-function setup(total: number) {
+function setup(total: number, maxOffset?: number) {
   const urls: URL[] = [];
   const fetchImpl = (async (input: string | URL | Request) => {
     const url = new URL(String(input));
@@ -25,7 +25,7 @@ function setup(total: number) {
     const result = { status: 200, result_count: n, total_count: total, first_position: offset, ...(n > 0 && { items }) };
     return new Response(JSON.stringify({ request: { parameters: { api_id: 'TEST_API_ID_DUMMY' } }, result }));
   }) as typeof fetch;
-  return { client: createClient({ ...CLIENT_OPTS, fetchImpl }), urls };
+  return { client: createClient({ ...CLIENT_OPTS, maxOffset, fetchImpl }), urls };
 }
 const entry = (id: string) => ({ id, name: `メモ${id}` });
 
@@ -53,7 +53,7 @@ test('offset が上限 5000 を超えず、打ち切って警告を通知する�
   assert.ok(offsets.every((o) => o <= 5000));
   assert.equal(r.fetched, 5000);
   assert.equal(infos.filter((i) => i.kind === 'warn').length, 1);
-  const old = setup(8000);
+  const old = setup(8000, 50000);
   const r2 = await ingestFollowed(old.client, openDb(':memory:'), { follow, maxOffset: 50000 });
   assert.equal(r2.fetched, 8000);
 });
