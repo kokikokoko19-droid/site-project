@@ -1,6 +1,7 @@
 ---
 // 探索ページ（/explore/）。重み付けの並べ替え・絞り込み・検索・ランダムは、ブラウザ側の JS（public/explorer/）が行う。
-// マークアップは mocks/explorer.html に合わせている。ジャンルなどの選択肢はビルド時に index.json から埋める。
+// マークアップは mocks/explorer.html に合わせている。ジャンル・ラベル・年の選択肢はビルド時に index.json から埋める。
+// 出演者・シリーズ・メーカーは数が多いので埋め込まず、ブラウザ側の検索式部品（axis-picker.js）が作品データから候補を作る。
 // 作品データ（/data/*.json）は scripts/copy-export.mjs が data/export から public/data にコピーする（npm run build の前に自動実行）。
 import { readFileSync } from 'node:fs';
 import Base from '../layouts/Base.astro';
@@ -10,9 +11,6 @@ import '../styles/explorer.css';
 interface ExportIndex {
   generatedAt?: string;
   genres?: unknown;
-  actresses?: unknown;
-  series?: unknown;
-  makers?: unknown;
   labels?: unknown;
   years?: unknown;
 }
@@ -34,9 +32,6 @@ function readIndex(): ExportIndex {
 const index = readIndex();
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 const genres = strings(index.genres);
-const actresses = strings(index.actresses);
-const series = strings(index.series);
-const makers = strings(index.makers);
 const labels = strings(index.labels);
 const years = (Array.isArray(index.years) ? index.years : []).filter((y): y is number => Number.isInteger(y));
 
@@ -88,15 +83,11 @@ const lens = [['short', '短め'], ['mid', '標準'], ['long', '長め']];
       <details>
         <summary>出演者・シリーズ・メーカー</summary>
         <div class="body">
-          <label class="field">出演者
-            <select id="f-act"><option value="">指定なし</option>{actresses.map((v) => <option value={v}>{v}</option>)}</select>
-          </label>
-          <label class="field">シリーズ
-            <select id="f-ser"><option value="">指定なし</option>{series.map((v) => <option value={v}>{v}</option>)}</select>
-          </label>
-          <label class="field">メーカー
-            <select id="f-mak"><option value="">指定なし</option>{makers.map((v) => <option value={v}>{v}</option>)}</select>
-          </label>
+          {[['act', '出演者'], ['ser', 'シリーズ'], ['mak', 'メーカー']].map(([k, t]) => (
+            <div class="field picker" data-axis={k} data-label={t} role="group" aria-label={t}>
+              <span class="pk-title">{t}</span>
+            </div>
+          ))}
         </div>
       </details>
       <details>

@@ -3,6 +3,7 @@
 // 入力部品とその選択肢は src/pages/explore.astro がビルド時に作っている。ここでは値の反映とイベントだけを行う。
 import { AXES, defaults, loadWorks, prepare, readURL, run, toQuery, yearsOf } from './explorer-core.js';
 import { cardHtml, modalHtml } from './explorer-view.js';
+import { createPicker, tally } from './axis-picker.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -20,6 +21,13 @@ function ensureOption(sel, k, v) {
   if (v && ![...sel.options].some((o) => o.value === v)) sel.add(new Option(k === 'year' ? `${v}年` : v, v));
 }
 
+// 出演者・シリーズ・メーカーの検索式部品。選ぶと状態に入れて sync する
+const pickers = {};
+for (const root of $$('#panel .picker')) {
+  const k = root.dataset.axis;
+  pickers[k] = createPicker(root, { label: root.dataset.label, onChange: (v) => { st[k] = v; sync(); } });
+}
+
 function syncControls() {
   for (const [k] of AXES) {
     $(`#sliders input[data-k="${k}"]`).value = st.w[k];
@@ -28,7 +36,8 @@ function syncControls() {
   $$('#panel [data-len]').forEach((b) => mark(b, b.dataset.len === st.len));
   $$('#panel [data-g]').forEach((b) => mark(b, st.g.includes(b.dataset.g)));
   $$('#panel [data-lab]').forEach((b) => mark(b, st.lab.includes(b.dataset.lab)));
-  for (const k of ['act', 'ser', 'mak', 'year']) { const s = $('#f-' + k); ensureOption(s, k, st[k]); s.value = st[k]; }
+  for (const k of ['act', 'ser', 'mak']) pickers[k].setValue(st[k]);
+  { const s = $('#f-year'); ensureOption(s, 'year', st.year); s.value = st.year; }
   for (const k of ['pmin', 'pmax', 'vmin', 'vmax']) $('#f-' + k).value = st[k];
   $('#f-sale').checked = st.sale;
   $('#f-sample').checked = st.sample;
@@ -120,6 +129,10 @@ async function load() {
     const data = await loadWorks((done, total) => { sentinel.textContent = `作品データを読み込み中…（${done} / ${total}）`; });
     works = prepare(data.works);
     byId = new Map(works.map((w) => [w.id, w]));
+    // 検索式の候補は、読み込んだカードデータから名前と件数を集計して作る
+    pickers.act.setItems(tally(works.flatMap((w) => w.a || [])));
+    pickers.ser.setItems(tally(works.map((w) => w.s)));
+    pickers.mak.setItems(tally(works.map((w) => w.m)));
     // 配信開始年の選択肢。ビルド時に入っていなければ（index.json に years が無いとき）、ここで足す
     const sel = $('#f-year'), years = Array.isArray(data.index.years) && data.index.years.length ? data.index.years : yearsOf(works);
     for (const y of years) ensureOption(sel, 'year', String(y));

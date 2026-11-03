@@ -1,6 +1,6 @@
 # 日次の更新（設計方針 8.1）。
 # 毎日 日本時間 06:00 に、取り込み → 派生計算 → 書き出し → ビルドを行い、dist/ を artifact に残す。
-# 配信（ホストへの転送）はホスト確定後に追加する。今は placeholder で、実際の転送は行わない。
+# 配信（mixhost への rsync/SSH）は deploy ジョブ。実データの実行で、配信用の secrets が揃っているときだけ転送する。
 # 手順と運用上の注意（cache の扱い、secrets の登録、失敗時の見方）は docs/07_運用手順.md を参照。
 name: Daily
 
@@ -139,16 +139,77 @@ jobs:
           # .htaccess や .well-known など、ドットで始まるファイルも含める
           include-hidden-files: true
 
-  # 配信（placeholder）。ホスト確定後に、dist/ をホストへ転送する手順をここに入れる。
-  # 今は if が常に false なのでスキップされ、実際の転送は行わない。
-  # 有効にするときの注意:
-  #   - 条件に needs.update.outputs.real_data == 'true' を含め、合成データの dist を本番へ出さない。
-  #   - dist は actions/download-artifact@v4 で artifact「dist」を取得して使う。
-  #   - 接続情報（SSH 鍵、ホスト名など）は secrets に置き、値をログやコミットに出さない。
+  # 配信。dist/ を rsync over SSH でホストへ同期する（scripts/deploy.sh）。
+  # 動くのは「実データの実行」かつ「接続用の secrets が 4 つ揃っている」ときだけ。
+  # 合成データの dist は本番へ出さない。secrets が欠けているときは何も転送せず、ジョブは成功で終わる。
+  # secrets は if に直接書けないので、判定ステップで has_deploy を出力し、後続ステップで使う。
+  # 設定の手順は docs/07_運用手順.md の 5 章を参照。
   deploy:
     needs: update
-    if: ${{ false }}
+    if: ${{ needs.update.outputs.real_data == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
     steps:
-      - name: 配信（未実装）
-        run: echo "ホスト確定後に rsync/SSH の手順をここに入れる。今は何も転送しない。"
+      - name: 配信用 secrets の有無を確認
+        id: gate
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ] && [ -n "$DEPLOY_PATH" ] && [ -n "$DEPLOY_SSH_KEY" ]; then
+            echo "has_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "配信: 実施する" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "has_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "配信: 見送り（DEPLOY_HOST・DEPLOY_USER・DEPLOY_PATH・DEPLOY_SSH_KEY のいずれかが未登録）" >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=配信を見送り::配信用の secrets が揃っていないため、転送しません。"
+          fi
+
+      - name: チェックアウト（scripts/deploy.sh のため）
+        if: steps.gate.outputs.has_deploy == 'true'
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: dist をダウンロード
+        if: steps.gate.outputs.has_deploy == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: SSH 鍵と known_hosts を用意
+        if: steps.gate.outputs.has_deploy == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # ホストの公開鍵を取得して登録する（初回の接続で確認を求められないようにする）
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: ホストへ配信
+        if: steps.gate.outputs.has_deploy == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_CHECK_URL: ${{ secrets.DEPLOY_CHECK_URL }}
+        run: |
+          export DEPLOY_KEY_FILE="$HOME/.ssh/deploy_key"
+          scripts/deploy.sh
+
+      # 成功・失敗にかかわらず、鍵はジョブの終わりに消す。
+      - name: SSH 鍵を削除
+        if: always() && steps.gate.outputs.has_deploy == 'true'
+        run: rm -f ~/.ssh/deploy_key

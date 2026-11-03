@@ -29,5 +29,16 @@
 .panel .field select, .panel .field input[type=number] { width: 100%; min-width: 0; }
 .panel .field .two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 
+/* 出演者・シリーズ・メーカーの検索式部品（axis-picker.js） */
+.pk-wrap { position: relative; min-width: 0; }
+.pk-input { width: 100%; min-width: 0; min-height: 44px; box-sizing: border-box; background: var(--bg2); border: 1px solid var(--line); border-radius: var(--radius); color: var(--fg0); padding: 0 var(--sp); font: inherit; }
+.pk-list { position: absolute; z-index: 5; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 0; list-style: none; max-height: 280px; overflow-y: auto; background: var(--bg1); border: 1px solid var(--line); border-radius: var(--radius); }
+.pk-list[hidden], .pk-wrap[hidden] { display: none; }
+.pk-opt, .pk-none { display: flex; align-items: center; justify-content: space-between; gap: var(--sp); min-height: 44px; padding: 0 var(--sp); cursor: pointer; overflow-wrap: anywhere; }
+.pk-none { cursor: default; color: var(--fg2); }
+.pk-opt small { color: var(--fg2); white-space: nowrap; }
+.pk-opt[aria-selected="true"], .pk-opt:hover { background: var(--bg2); outline: 1px solid var(--accent); outline-offset: -1px; }
+.pk-chip { min-height: 44px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+
 /* 該当なしの枠は hidden 属性で出し入れする。common.css の .empty { display: grid } に負けないようにする */
 .empty[hidden] { display: none; }
