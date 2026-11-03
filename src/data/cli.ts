@@ -1,6 +1,6 @@
 /**
  * データ層の CLI。使い方: node --experimental-strip-types src/data/cli.ts <command> [--flags]
- *   ingest  FANZA API から取り込む。直近の取り込み（--recent-days N、既定 7）に続けて、--refresh（取り込み済みの再取得）、
+ *   ingest  FANZA API から取り込む。直近の取り込み（--recent-days N、既定 7）に続けて、--follow（config/follow.json の指定軸の全作品。--follow-config で変更）、--refresh（取り込み済みの再取得）、
  *           --ranked-pages N（人気順の上位 N ページ）を行う。--synthetic N なら API を使わず合成データ N 件だけを入れる
  *   derive  ラベル・似た作品・ランキング・今日の候補を再計算する
  *   export  探索UI・ページ生成用の JSON を出力する
@@ -15,10 +15,11 @@ import { openDb } from './db.ts';
 import type { Db } from './db.ts';
 import { runDerive } from './derive.ts';
 import { exportAll } from './export.ts';
+import { ingestFollowed, loadFollowConfig } from './ingest-follow.ts';
 import { ingestRanked, ingestRecent, ingestSynthetic, refreshExisting } from './ingest.ts';
 
 const USAGE = `使い方: node --experimental-strip-types src/data/cli.ts <command> [--flags]
-  ingest  [--recent-days N] [--refresh] [--ranked-pages N] [--synthetic N]
+  ingest  [--recent-days N] [--follow [--follow-config PATH]] [--refresh] [--ranked-pages N] [--synthetic N]
   derive
   export
   all     （ingest と同じフラグ。ingest → derive → export）
@@ -27,7 +28,7 @@ const USAGE = `使い方: node --experimental-strip-types src/data/cli.ts <comma
 /** 使い方・設定の誤り（終了コード 2） */
 class UsageError extends Error {}
 
-type Flags = { recentDays: number; refresh: boolean; rankedPages: number | null; synthetic: number | null };
+type Flags = { follow: boolean; followConfig: string; recentDays: number; refresh: boolean; rankedPages: number | null; synthetic: number | null };
 
 /** フラグの整数を読む（未指定なら fallback） */
 function toInt(name: string, v: string | undefined, fallback: number | null, min: number): number | null {
@@ -41,12 +42,13 @@ function parseCli(argv: string[]): { command: string | undefined; flags: Flags; 
     const { values, positionals } = parseArgs({
       args: argv, allowPositionals: true,
       options: {
-        'recent-days': { type: 'string' }, refresh: { type: 'boolean' }, 'ranked-pages': { type: 'string' },
+        'recent-days': { type: 'string' }, refresh: { type: 'boolean' }, follow: { type: 'boolean' }, 'follow-config': { type: 'string' }, 'ranked-pages': { type: 'string' },
         synthetic: { type: 'string' }, help: { type: 'boolean', short: 'h' },
       },
     });
     if (positionals.length > 1) throw new UsageError(`余分な引数があります: ${positionals.slice(1).join(' ')}`);
     const flags: Flags = {
+      follow: values.follow === true, followConfig: values['follow-config'] ?? 'config/follow.json',
       recentDays: toInt('recent-days', values['recent-days'], 7, 0) as number, refresh: values.refresh === true,
       rankedPages: toInt('ranked-pages', values['ranked-pages'], null, 1), synthetic: toInt('synthetic', values.synthetic, null, 1),
     };
@@ -79,6 +81,10 @@ async function runIngest(db: Db, f: Flags): Promise<void> {
   const client = createClient({ apiId: process.env.FANZA_API_ID as string, affiliateId: process.env.FANZA_AFFILIATE_ID as string });
   log(`[ingest] 直近 ${f.recentDays} 日分を取り込みます`);
   log(`[ingest] 完了: ${summary(await ingestRecent(client, db, { days: f.recentDays, onProgress }))}`);
+  if (f.follow) { // 順序は recent → follow → refresh → ranked
+    log(`[ingest] 指定軸（${f.followConfig}）の全作品を取り込みます`);
+    log(`[ingest] 完了: ${summary(await ingestFollowed(client, db, { follow: loadFollowConfig(f.followConfig), onProgress }))}`);
+  }
   if (f.refresh) {
     log('[ingest] 取り込み済みの作品を再取得します');
     log(`[ingest] 完了: ${summary(await refreshExisting(client, db, { onProgress }))}`);
