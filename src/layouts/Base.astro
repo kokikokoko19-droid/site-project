@@ -186,11 +186,12 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
           <a href="/removal/">掲載停止のご依頼</a>
           <a href="/about/#contact">お問い合わせ</a>
         </div>
-        {/* TODO: FANZA API のクレジット表記の文言は、運営者が規約を確認してから確定する（docs/01_未確認事項.md の3） */}
+        {/* クレジット表記は DMM Web サービスの規定どおり（docs/10）。文言とリンク先は改変しない */}
         <p>
           データ更新: {updated ? <time datetime={updated.iso}>{updated.text}</time> : '準備中'}
-          ／画像・動画はDMM.comの提供／18歳未満の方の閲覧はお断りします。
+          ／18歳未満の方の閲覧はお断りします。
         </p>
+        <p>Powered by <a href="https://affiliate.dmm.com/api/">FANZA Webサービス</a></p>
         {/* scoped な <style> は全要素に属性が付き、HTMLが膨らむので、モックと同じ inline style にする */}
         <div style="margin-top: 16px"><AdSlot name="footer" /></div>
       </div>

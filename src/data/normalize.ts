@@ -34,6 +34,13 @@ function toObjects(v: unknown): any[] {
 }
 
 /** 文字列の配列を取り出す（単一の文字列は1要素扱い、空の要素は除く） */
+/** DMM 配信ホストの http URL を https に揃える（公式リファレンスの例は http。ページは https なので混在コンテンツを避ける） */
+function toHttpsUrl(v: unknown): string | null {
+  const s = toStr(v);
+  if (s === null) return null;
+  return s.replace(/^http:\/\/((?:[a-z0-9-]+\.)*dmm\.(?:co\.jp|com))\//i, 'https://$1/');
+}
+
 function toStrings(v: unknown): string[] {
   const arr = Array.isArray(v) ? v : v === undefined || v === null ? [] : [v];
   return arr.map((e) => toStr(e)).filter((s): s is string => s !== null);
@@ -93,7 +100,7 @@ function toSampleMovie(v: any): SampleMovie | null {
   if (v === null || typeof v !== 'object') return null;
   const sizes: Record<string, string> = {};
   for (const [key, val] of Object.entries(v)) {
-    const url = toStr(val);
+    const url = toHttpsUrl(val);
     if (key.startsWith('size_') && url !== null) sizes[key] = url;
   }
   if (Object.keys(sizes).length === 0) return null;
@@ -125,12 +132,12 @@ export function normalizeItem(raw: any, opts: NormalizeOptions): Work {
     priceMin: toNum(prices?.price),
     listPrice: toNum(prices?.list_price),
     deliveries: toObjects(prices?.deliveries?.delivery).map((d) => toDelivery(d)),
-    imageList: toStr(raw.imageURL?.list),
-    imageSmall: toStr(raw.imageURL?.small),
-    imageLarge: toStr(raw.imageURL?.large),
-    sampleImages: large.length > 0 ? large : toStrings(raw.sampleImageURL?.sample_s?.image),
+    imageList: toHttpsUrl(raw.imageURL?.list),
+    imageSmall: toHttpsUrl(raw.imageURL?.small),
+    imageLarge: toHttpsUrl(raw.imageURL?.large),
+    sampleImages: (large.length > 0 ? large : toStrings(raw.sampleImageURL?.sample_s?.image)).map((u) => toHttpsUrl(u) ?? u),
     sampleMovie: toSampleMovie(raw.sampleMovieURL),
-    campaigns: toObjects(raw.campaign).map((c) => toCampaign(c)),
+    campaigns: toObjects(raw.campaign ?? raw.cdinfo?.campaign).map((c) => toCampaign(c)), // 公式表の階層が判読不可のため cdinfo 配下も見る
     genres: toRefs(info?.genre),
     actresses: toRefs(info?.actress),
     series: toRefs(info?.series),
