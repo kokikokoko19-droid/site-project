@@ -22,10 +22,11 @@ interface Props {
   noindex?: boolean;
 }
 
-const SITE_NAME = 'カタログ（仮）';
+const SITE_NAME = 'AVめぐり';
+const SITE_TAGLINE = 'AV女優とおすすめ作品を見て回るカタログ';
 const {
   title,
-  description = '出演者・シリーズ・メーカー・ジャンルの軸から作品を見て回る、カタログ型のサイトです。',
+  description = 'AV女優とおすすめ作品を見て回るカタログ。出演者・シリーズ・メーカー・ジャンルの軸から、評価と新しさで並べ替えて探せます。',
   dataUpdatedAt,
   showAdSlots = false,
   ogType = 'website',
@@ -33,7 +34,7 @@ const {
   noindex = false,
 } = Astro.props;
 
-const pageTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME;
+const pageTitle = title ? `${title}｜${SITE_NAME}` : `${SITE_NAME}｜${SITE_TAGLINE}`;
 const { pathname } = Astro.url;
 
 // canonical と og:url。パスは Astro.url のもの。
@@ -156,7 +157,7 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
 
     <header class="site-header">
       <div class="wrap">
-        <a class="logo" href="/">カタログ<span>（仮）</span></a>
+        <a class="logo" href="/">AV<span>めぐり</span></a>
         {/* 探索ページ（/explore/）が q を読む。JS なしでも送信できる GET フォーム */}
         <form class="search" action="/explore/" method="get" role="search">
           <input name="q" type="search" placeholder="タイトル・出演者・シリーズ・メーカーで検索" aria-label="検索" />

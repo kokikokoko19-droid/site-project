@@ -3,4 +3,4 @@ User-agent: *
 Disallow: /go/
 
 # site は astro.config.mjs の値（いまは仮ドメイン）。本番のURLに替えるときは、この行も同じ値に合わせる。
-Sitemap: https://example.invalid/sitemap-index.xml
+Sitemap: https://avmeguri.com/sitemap-index.xml

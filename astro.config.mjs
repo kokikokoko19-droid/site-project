@@ -7,7 +7,7 @@ import sitemap from '@astrojs/sitemap';
 // 確定したら本番のURLに差し替える（canonical や sitemap に使われる。public/robots.txt の Sitemap 行も合わせる）。
 export default defineConfig({
   output: 'static',
-  site: 'https://example.invalid',
+  site: 'https://avmeguri.com', // 取得予定のドメイン。取得後に実際の値へ
   // URL は末尾スラッシュ付きで統一する（設計方針 2.1 のURL表と同じ形）
   trailingSlash: 'always',
   build: {
