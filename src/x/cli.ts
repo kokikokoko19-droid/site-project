@@ -1,11 +1,11 @@
 /**
  * X 自動投稿の CLI。使い方: node --experimental-strip-types src/x/cli.ts post [--count 3] [--with-url] [--dry-run] [--kind daily]
- *   post  作品を選んで X に投稿する。--count 件（既定 3）。1日（日本時間）の上限 X_DAILY_MAX（既定 5）を超えない範囲で投稿する。
+ *   post  作品を選んで X に投稿する。--count 件（既定 3）。1日（日本時間）の上限 X_DAILY_MAX（既定 3）を超えない範囲で投稿する。
  *         --with-url   本文の末尾に作品ページの URL を付ける（URL 付きは単価が高い。docs/02 8.2）
  *         --dry-run    通信せず、本文を標準出力に出して履歴に dry_run=1 で記録する（認証情報は要らない）
  *         --kind       履歴に残す区分（daily | feature | sale。既定 daily）。sale は「セール中」の作品だけから選ぶ
  * 環境変数: X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET（--dry-run 以外で必須）、SITE_URL（--with-url で必須）、
- *   DB_PATH（既定 data/catalog.sqlite）, EXPORT_DIR（既定 data/export）, X_DAILY_MAX（既定 5。0 で投稿を止める）
+ *   DB_PATH（既定 data/catalog.sqlite）, EXPORT_DIR（既定 data/export）, X_DAILY_MAX（既定 3。0 で投稿を止める）
  *   .env を使うときは node に --env-file=.env を付ける。
  * 終了コード: 0 成功（上限に達して投稿しなかった場合を含む）、1 実行中のエラー、2 使い方・設定の誤り（認証情報の不足を含む）。
  * 認証情報の値は出力しない。投稿は2件目以降、前の投稿から 60 秒以上あける。
@@ -22,7 +22,7 @@ import type { PostKind } from './store.ts';
 
 export const POST_INTERVAL_MS = 60_000;
 const DEFAULT_COUNT = 3;
-const DEFAULT_DAILY_MAX = 5;
+const DEFAULT_DAILY_MAX = 3;
 const CRED_KEYS = ['X_API_KEY', 'X_API_SECRET', 'X_ACCESS_TOKEN', 'X_ACCESS_TOKEN_SECRET'] as const;
 
 const USAGE = `使い方: node --experimental-strip-types src/x/cli.ts post [--count 3] [--with-url] [--dry-run] [--kind daily]
