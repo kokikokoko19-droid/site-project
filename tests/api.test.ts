@@ -65,12 +65,12 @@ test('itemList: 指定なしなら既定の site/service/floor だけを付け�
 test('不正な値（hits/offset/sort/日付）は RangeError になり、通信しない', async () => {
   const { client, urls } = make([() => json(itemsBody())]);
   const bad = [
-    { hits: 0 }, { hits: 101 }, { hits: 1.5 }, { offset: 0 }, { offset: 50001 }, { sort: 'bogus' },
+    { hits: 0 }, { hits: 101 }, { hits: 1.5 }, { offset: 0 }, { offset: 5001 }, { sort: 'bogus' },
     { gte_date: '2016-04-01' }, { lte_date: '2016-04-01 00:00:00' }, { gte_date: '2016-13-01T00:00:00' },
   ];
   for (const p of bad) await assert.rejects(() => client.itemList(p as never), RangeError, JSON.stringify(p));
   assert.equal(urls.length, 0);
-  await client.itemList({ hits: 100, offset: 50000, sort: '-price' }); // 境界値は通る
+  await client.itemList({ hits: 100, offset: 5000, sort: '-price' }); // 境界値は通る
   assert.equal(urls.length, 1);
 });
 
@@ -115,7 +115,7 @@ test('レスポンスの request（API ID 入り）は、どの API の結果に
 
 test('0件で items キーが欠落しても空配列で返し、文字列の status は数値にする', async () => {
   const { client } = make([() => json(wrap({ status: '200', result_count: 0, total_count: 0 }))]);
-  assert.deepEqual(await client.itemList({ offset: 50000 }), { status: 200, resultCount: 0, totalCount: 0, firstPosition: 0, items: [] });
+  assert.deepEqual(await client.itemList({ offset: 5000 }), { status: 200, resultCount: 0, totalCount: 0, firstPosition: 0, items: [] });
 });
 
 test('429 のあと 200 なら再試行して成功し、sleep が呼ばれる', async () => {

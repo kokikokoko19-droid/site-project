@@ -4,6 +4,8 @@
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isBlocked, loadBlocklist } from './blocklist.ts';
+import type { Blocklist } from './blocklist.ts';
 import type { Db } from './db.ts';
 import { ALL_LABELS } from './derive.ts';
 import type { DerivedLabel, Work, WorkCardRecord } from './types.ts';
@@ -49,14 +51,18 @@ function readJson(db: Db, key: string): unknown {
  * active の作品を outDir に出力する。
  * works-000.json…（WorkCardRecord を chunkSize 件ずつ）、works.json（全 Work + derivedLabels + similarIds）、
  * actresses.json（ActressProfile[]。works に出てくる出演者のみ）、meta.json（rankings・todays・last_ingest_at・last_derive_at）、index.json（件数・チャンク名・絞り込み用の名前一覧）。
+ * 除外リスト（config/blocklist.json）に該当する作品は、全ての出力（rankings・todays・出演者を含む）から除く。DB は変えない。
  * index.json は最後に書く。前回より少なくなって余ったチャンクは消す。now は generatedAt の差し替え用。
  */
 export function exportAll(
-  db: Db, outDir: string, opts: { chunkSize?: number; now?: Date } = {},
-): { works: number; chunks: number } {
+  db: Db, outDir: string, opts: { chunkSize?: number; now?: Date; blocklist?: Blocklist } = {},
+): { works: number; chunks: number; blocked?: number } {
   const chunkSize = opts.chunkSize ?? 1000;
   if (!Number.isInteger(chunkSize) || chunkSize < 1) throw new RangeError(`chunkSize は1以上の整数で指定してください: ${chunkSize}`);
-  const works = db.listWorks({ status: 'active' });
+  const blocklist = opts.blocklist ?? loadBlocklist();
+  const all = db.listWorks({ status: 'active' });
+  const works = all.filter((w) => !isBlocked(w, blocklist));
+  const blocked = all.length - works.length;
   const active = new Set(works.map((w) => w.contentId));
   // 派生後に gone になった作品の ID が残っていても、出力には含めない
   const keep = (ids: unknown): string[] => (Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string' && active.has(id)) : []);
@@ -97,5 +103,6 @@ export function exportAll(
     labels: ALL_LABELS.filter((l) => full.some((w) => w.derivedLabels.includes(l))), // 実際に使われているラベルだけ
   });
   for (const f of readdirSync(outDir)) if (/^works-\d+\.json$/.test(f) && !chunks.includes(f)) rmSync(join(outDir, f));
-  return { works: works.length, chunks: chunks.length };
+  // blocked は除外があったときだけ付ける（0 件のときの戻り値は従来と同じ）
+  return blocked > 0 ? { works: works.length, chunks: chunks.length, blocked } : { works: works.length, chunks: chunks.length };
 }

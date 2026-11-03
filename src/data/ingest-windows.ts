@@ -1,9 +1,10 @@
 /**
  * FANZA API の取り込み（差分更新）のうち、期間の窓で全件を取る部分。
- * ItemList は offset の上限が 50000 なので、該当件数がそれ以上になる期間は、日付の中点で窓を2分割して取る。
+ * ItemList は offset に上限（既定 5000。環境変数 FANZA_MAX_OFFSET）があるので、取り切れない件数の期間は、日付の中点で窓を2分割して取る。
  * 作品データは実行時に API から取得して正規化し、db に入れるだけ（保存はキャッシュ設計に従う）。
  * ログは console ではなく onProgress で呼び出し側へ渡す。例外は握りつぶさず上に投げる。
  */
+import { resolveMaxOffset } from './api.ts';
 import type { createClient } from './api.ts';
 import type { Db } from './db.ts';
 import { normalizeItems } from './normalize.ts';
@@ -21,12 +22,14 @@ export type IngestProgress = {
 export type WindowOptions = {
   gteDate: string; lteDate: string; hits?: number;
   onProgress?: (info: IngestProgress) => void; now?: () => Date;
+  /** offset の上限（省略時は MAX_OFFSET） */
+  maxOffset?: number;
 };
 /** windows は実際に取り込んだ窓の数（分割した親の窓は数えない） */
 export type WindowResult = { fetched: number; upserted: number; windows: number };
 
-export const MAX_OFFSET = 50000; // ItemList の offset の上限
-const MAX_TOTAL = 50000;         // 窓の該当件数がこれ以上なら、先頭の 50000 件しか取れないので窓を分ける
+/** offset の上限。環境変数 FANZA_MAX_OFFSET で変えられる（既定 5000。旧仕様に戻すなら 50000） */
+export const MAX_OFFSET = resolveMaxOffset();
 const UPSERT_CHUNK = 100;        // db.upsertWorks に一度に渡す最大件数
 const DAY_SECONDS = 86400;
 
@@ -58,13 +61,20 @@ export function upsertInChunks(db: Db, works: Work[]): number {
   return n;
 }
 
+/** offset を 1, 1+hits, … と上限以下で進めたときに取れる最大件数 */
+export function fetchCapacity(maxOffset: number, hits: number): number {
+  return (Math.floor((maxOffset - 1) / hits) + 1) * hits;
+}
+
 /**
  * 期間 [gteDate, lteDate]（両端を含む）の作品を sort=date で先頭から全件取り込む。
- * 最初の応答の totalCount が 50000 以上なら窓を中点で2分割して再帰する（1日以下の窓は分割せず、
- * 取れる範囲だけ取って警告を通知する）。offset は 1 始まりで hits ずつ進め、50000 を超えない。
+ * 最初の応答の totalCount が offset 上限で取り切れない件数なら窓を中点で2分割して再帰する（1日以下の窓は分割せず、
+ * 取れる範囲だけ取って警告を通知する）。offset は 1 始まりで hits ずつ進め、上限を超えない。
  */
 export async function ingestWindow(client: IngestClient, db: Db, opts: WindowOptions): Promise<WindowResult> {
   const hits = opts.hits ?? 100;
+  const maxOffset = opts.maxOffset ?? MAX_OFFSET;
+  const capacity = fetchCapacity(maxOffset, hits);
   const now = opts.now ?? (() => new Date());
   const notify = opts.onProgress ?? (() => {});
   if (apiDateToSeconds(opts.gteDate) > apiDateToSeconds(opts.lteDate)) {
@@ -78,7 +88,7 @@ export async function ingestWindow(client: IngestClient, db: Db, opts: WindowOpt
     let page = await client.itemList({ ...query, offset: 1 });
     const total = page.totalCount;
     const range = `${gteDate}〜${lteDate}`;
-    if (total >= MAX_TOTAL) {
+    if (total > capacity) {
       if (apiDateToSeconds(lteDate) - apiDateToSeconds(gteDate) > DAY_SECONDS) {
         notify({ kind: 'split', message: `${range} は ${total} 件あるため、中点で2分割します`, gteDate, lteDate, totalCount: total });
         const [left, right] = splitWindow(gteDate, lteDate);
@@ -88,7 +98,7 @@ export async function ingestWindow(client: IngestClient, db: Db, opts: WindowOpt
       }
       notify({
         kind: 'warn', gteDate, lteDate, totalCount: total,
-        message: `${range} は1日以下でも ${total} 件あり分割できないため、先頭 ${MAX_OFFSET} 件までを取り込みます`,
+        message: `${range} は1日以下でも ${total} 件あり分割できないため、先頭 ${capacity} 件までを取り込みます`,
       });
     }
     stats.windows += 1;
@@ -98,7 +108,7 @@ export async function ingestWindow(client: IngestClient, db: Db, opts: WindowOpt
       stats.upserted += upsertInChunks(db, normalizeItems(page.items, { fetchedAt: now().toISOString() }));
       notify({ kind: 'page', message: `${range}: ${offset} 件目から ${page.items.length} 件を取得（全 ${total} 件）`, gteDate, lteDate, offset, totalCount: total });
       offset += hits;
-      if (page.items.length === 0 || offset > MAX_OFFSET || offset > total) return; // 空ページ・offset 上限・末尾で止める
+      if (page.items.length === 0 || offset > maxOffset || offset > total) return; // 空ページ・offset 上限・末尾で止める
       page = await client.itemList({ ...query, offset });
     }
   }

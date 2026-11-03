@@ -85,21 +85,22 @@ export async function refreshExisting(
 /**
  * sort=rank を offset 1 から pages ページ取得し、items を upsert して順位（1 始まり）を付ける。
  * 順位は offset + ページ内の位置（欠けたページがなければ通し番号と同じ）。同じ作品が複数ページに出たら先の順位を採る。
- * total や offset の上限（50000）を超える先は取りに行かない。
+ * total や offset の上限（既定 5000）を超える先は取りに行かない。
  */
 export async function ingestRanked(
-  client: IngestClient, db: Db, opts: Common & { pages: number; hits?: number },
+  client: IngestClient, db: Db, opts: Common & { pages: number; hits?: number; maxOffset?: number },
 ): Promise<{ ranked: number }> {
   checkInt('pages', opts.pages, 1);
   const hits = opts.hits ?? 100;
+  const maxOffset = opts.maxOffset ?? MAX_OFFSET;
   const now = opts.now ?? (() => new Date());
   const notify = opts.onProgress ?? (() => {});
   const seen = new Set<string>();
   let cleared = false; // 最初のページが取れた時点で古い順位を消す（取得失敗時に順位を失わないため）
   for (let p = 0; p < opts.pages; p++) {
     const offset = 1 + p * hits;
-    if (offset > MAX_OFFSET) {
-      notify({ kind: 'warn', message: `offset の上限 ${MAX_OFFSET} を超えるため、${p} ページで打ち切ります` });
+    if (offset > maxOffset) {
+      notify({ kind: 'warn', message: `offset の上限 ${maxOffset} を超えるため、${p} ページで打ち切ります` });
       break;
     }
     const page = await client.itemList({ sort: 'rank', hits, offset });

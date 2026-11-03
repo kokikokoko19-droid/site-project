@@ -42,6 +42,22 @@ test('article と article_id が URL に載り、offset が進む', async () => 
   assert.deepEqual(r, { axes: 1, fetched: 250, upserted: 250 });
 });
 
+test('offset が上限 5000 を超えず、打ち切って警告を通知する。maxOffset=50000 なら旧挙動', async () => {
+  const { client, urls } = setup(8000);
+  const infos: { kind: string }[] = [];
+  const follow = { actresses: [entry('1')], series: [], makers: [] };
+  const r = await ingestFollowed(client, openDb(':memory:'), { follow, onProgress: (i) => infos.push(i) });
+  const offsets = urls.map((u) => Number(u.searchParams.get('offset')));
+  assert.equal(offsets.length, 50);
+  assert.equal(offsets.at(-1), 4901);
+  assert.ok(offsets.every((o) => o <= 5000));
+  assert.equal(r.fetched, 5000);
+  assert.equal(infos.filter((i) => i.kind === 'warn').length, 1);
+  const old = setup(8000);
+  const r2 = await ingestFollowed(old.client, openDb(':memory:'), { follow, maxOffset: 50000 });
+  assert.equal(r2.fetched, 8000);
+});
+
 test('3 軸 × 2 id で呼び出し数が合う', async () => {
   const { client, urls } = setup(150); // 1 軸あたり 2 ページ
   const db = openDb(':memory:');

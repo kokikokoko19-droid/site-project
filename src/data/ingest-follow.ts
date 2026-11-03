@@ -1,7 +1,7 @@
 /**
  * 指定した出演者・シリーズ・メーカーの全作品を取り込む（config/follow.json）。
  * 各 id について ItemList を article / article_id 付き・新しい順で offset を進めながら全件取得し、
- * 正規化して 100 件ごとに upsert する。offset の上限（50000）か total_count に達したら止める。
+ * 正規化して 100 件ごとに upsert する。offset の上限（既定 5000）か total_count に達したら止める。
  * 例外は握りつぶさず上に投げる（途中までに upsert した分は残る）。
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -55,9 +55,10 @@ export function loadFollowConfig(path: string): FollowConfig {
 
 export async function ingestFollowed(
   client: IngestClient, db: Db,
-  opts: { follow: FollowConfig; hits?: number; onProgress?: (info: IngestProgress) => void; now?: () => Date },
+  opts: { follow: FollowConfig; hits?: number; maxOffset?: number; onProgress?: (info: IngestProgress) => void; now?: () => Date },
 ): Promise<{ axes: number; fetched: number; upserted: number }> {
   const hits = opts.hits ?? 100;
+  const maxOffset = opts.maxOffset ?? MAX_OFFSET;
   const now = opts.now ?? (() => new Date());
   const notify = opts.onProgress ?? (() => {});
   let axes = 0, fetched = 0, upserted = 0;
@@ -65,7 +66,7 @@ export async function ingestFollowed(
     for (const entry of opts.follow[key]) {
       axes += 1;
       let offset = 1;
-      while (offset <= MAX_OFFSET) {
+      while (offset <= maxOffset) {
         const page = await client.itemList({ article, article_id: entry.id, sort: 'date', hits, offset });
         const works = normalizeItems(page.items, { fetchedAt: now().toISOString() });
         fetched += works.length;
@@ -74,7 +75,7 @@ export async function ingestFollowed(
         if (page.items.length === 0 || offset + hits > page.totalCount) break;
         offset += hits;
       }
-      if (offset > MAX_OFFSET) notify({ kind: 'warn', message: `${label} ${entry.id} は offset の上限 ${MAX_OFFSET} に達したため打ち切ります` });
+      if (offset > maxOffset) notify({ kind: 'warn', message: `${label} ${entry.id} は offset の上限 ${maxOffset} に達したため打ち切ります` });
     }
   }
   if (axes > 0) db.setMeta('last_ingest_at', now().toISOString());

@@ -17,6 +17,8 @@ export type RawRecord = Record<string, unknown>;
 export type ClientOptions = {
   apiId: string; affiliateId: string; fetchImpl?: typeof fetch;
   minIntervalMs?: number; maxRetries?: number; baseUrl?: string;
+  /** offset の上限。省略時は環境変数 FANZA_MAX_OFFSET（既定 5000） */
+  maxOffset?: number;
   sleep?: (ms: number) => Promise<void>;
 };
 export type ItemListParams = {
@@ -46,6 +48,18 @@ export function buildUrl(path: string, params: Params, baseUrl: string = DEFAULT
   }
   const base = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
   return pairs.length > 0 ? `${base}${path}?${pairs.join('&')}` : `${base}${path}`;
+}
+
+/** offset 上限の既定値。公式のお知らせにより 2026年12月ごろに 50000 から 5000 へ変更される */
+export const DEFAULT_MAX_OFFSET = 5000;
+
+/** 環境変数 FANZA_MAX_OFFSET から offset の上限を決める。未設定・空は既定値、1 以上の整数以外はエラー */
+export function resolveMaxOffset(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.FANZA_MAX_OFFSET?.trim();
+  if (!raw) return DEFAULT_MAX_OFFSET;
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 1) throw new RangeError(`FANZA_MAX_OFFSET は 1 以上の整数で指定してください: ${raw}`);
+  return n;
 }
 
 function checkInt(name: string, v: number | undefined, min: number, max: number): void {
@@ -99,11 +113,13 @@ export function createClient(opts: ClientOptions) {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const minIntervalMs = opts.minIntervalMs ?? 1000;
   const maxRetries = opts.maxRetries ?? 3;
+  const maxOffset = opts.maxOffset ?? resolveMaxOffset();
   const baseUrl = opts.baseUrl ?? DEFAULT_BASE_URL;
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   if (!apiId || !affiliateId) throw new RangeError('apiId と affiliateId は必須です');
   checkInt('minIntervalMs', minIntervalMs, 0, Infinity);
   checkInt('maxRetries', maxRetries, 0, Infinity);
+  checkInt('maxOffset', maxOffset, 1, Infinity);
   try {
     new URL(baseUrl);
   } catch {
@@ -152,7 +168,7 @@ export function createClient(opts: ClientOptions) {
   async function search(path: string, key: string, p: SearchParams): Promise<SearchResult> {
     const floorId = floorIdOf(p?.floor_id);
     checkInt('hits', p.hits, 1, 500);
-    checkInt('offset', p.offset, 1, Infinity); // offset の上限は ItemList のみ判明（50000）。他は下限だけ見る
+    checkInt('offset', p.offset, 1, maxOffset); // 公式のお知らせでは Search 系も同じ上限に変更される
     const result = await call(path, { floor_id: floorId, hits: p.hits, offset: p.offset, initial: p.initial });
     const list = rowsOf(result[key]);
     return { ...pageOf(result, list), list };
@@ -161,7 +177,7 @@ export function createClient(opts: ClientOptions) {
   return {
     async itemList(p: ItemListParams = {}): Promise<ItemListResult> {
       checkInt('hits', p.hits, 1, 100);
-      checkInt('offset', p.offset, 1, 50000);
+      checkInt('offset', p.offset, 1, maxOffset);
       if (p.sort !== undefined && !SORTS.includes(p.sort)) {
         throw new RangeError(`sort は ${SORTS.join('|')} のいずれかを指定してください`);
       }
@@ -184,7 +200,7 @@ export function createClient(opts: ClientOptions) {
     seriesSearch: (p: SearchParams) => search('SeriesSearch', 'series', p),
     async actressSearch(p: ActressSearchParams = {}): Promise<SearchResult> {
       checkInt('hits', p.hits, 1, 100);
-      checkInt('offset', p.offset, 1, Infinity);
+      checkInt('offset', p.offset, 1, maxOffset);
       const { hits, offset, initial, actress_id, keyword } = p;
       const result = await call('ActressSearch', { hits, offset, initial, actress_id, keyword });
       const list = rowsOf(result.actress);
