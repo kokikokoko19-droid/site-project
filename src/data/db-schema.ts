@@ -3,7 +3,7 @@
  * db.ts から使う内部モジュール。
  */
 import type { DatabaseSync } from 'node:sqlite';
-import type { Campaign, Delivery, NamedRef, SampleMovie, Work, WorkStatus } from './types.ts';
+import type { ActressProfile, Campaign, Delivery, NamedRef, SampleMovie, Work, WorkStatus } from './types.ts';
 
 /** node:sqlite にバインドできる値（undefined と boolean は渡せないので使わない） */
 export type SqlValue = string | number | null;
@@ -88,6 +88,12 @@ CREATE TABLE IF NOT EXISTS similar (
   similar_id TEXT NOT NULL,
   score REAL NOT NULL,
   PRIMARY KEY (content_id, similar_id)
+);
+CREATE TABLE IF NOT EXISTS actress_profiles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL, ruby TEXT, birthday TEXT, blood_type TEXT, hobby TEXT, prefectures TEXT,
+  height INTEGER, bust INTEGER, waist INTEGER, hip INTEGER, cup TEXT, list_url TEXT,
+  fetched_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS meta (
   key TEXT PRIMARY KEY,
@@ -193,4 +199,33 @@ export function loadWorks(db: DatabaseSync, rows: WorkRow[]): Work[] {
     }
   }
   return rows.map((r) => rowToWork(r, refs.get(r.content_id) ?? emptyRefs()));
+}
+
+/** actress_profiles の1行（列名は DDL と同じ） */
+export type ActressProfileRow = {
+  id: string; name: string; ruby: string | null; birthday: string | null; blood_type: string | null;
+  hobby: string | null; prefectures: string | null; height: number | null; bust: number | null;
+  waist: number | null; hip: number | null; cup: string | null; list_url: string | null; fetched_at: string;
+};
+
+export const UPSERT_ACTRESS_SQL = `
+INSERT INTO actress_profiles (id, name, ruby, birthday, blood_type, hobby, prefectures, height, bust, waist, hip, cup, list_url, fetched_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  name = excluded.name, ruby = excluded.ruby, birthday = excluded.birthday, blood_type = excluded.blood_type,
+  hobby = excluded.hobby, prefectures = excluded.prefectures, height = excluded.height, bust = excluded.bust,
+  waist = excluded.waist, hip = excluded.hip, cup = excluded.cup, list_url = excluded.list_url,
+  fetched_at = excluded.fetched_at`;
+
+export function actressToParams(a: ActressProfile): SqlValue[] {
+  return [a.id, a.name, a.ruby, a.birthday, a.bloodType, a.hobby, a.prefectures, a.height, a.bust, a.waist,
+    a.hip, a.cup, a.listUrl, a.fetchedAt].map((v) => v ?? null) as SqlValue[];
+}
+
+export function rowToActress(r: ActressProfileRow): ActressProfile {
+  return {
+    id: r.id, name: r.name, ruby: r.ruby, birthday: r.birthday, bloodType: r.blood_type, hobby: r.hobby,
+    prefectures: r.prefectures, height: r.height, bust: r.bust, waist: r.waist, hip: r.hip, cup: r.cup,
+    listUrl: r.list_url, fetchedAt: r.fetched_at,
+  };
 }

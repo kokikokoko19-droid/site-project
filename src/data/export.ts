@@ -47,7 +47,7 @@ function readJson(db: Db, key: string): unknown {
 /**
  * active の作品を outDir に出力する。
  * works-000.json…（WorkCardRecord を chunkSize 件ずつ）、works.json（全 Work + derivedLabels + similarIds）、
- * meta.json（rankings・todays・last_ingest_at・last_derive_at）、index.json（件数・チャンク名・絞り込み用の名前一覧）。
+ * actresses.json（ActressProfile[]。works に出てくる出演者のみ）、meta.json（rankings・todays・last_ingest_at・last_derive_at）、index.json（件数・チャンク名・絞り込み用の名前一覧）。
  * index.json は最後に書く。前回より少なくなって余ったチャンクは消す。now は generatedAt の差し替え用。
  */
 export function exportAll(
@@ -83,6 +83,11 @@ export function exportAll(
     write(chunks[i], cards.slice(i * chunkSize, (i + 1) * chunkSize));
   }
   write('works.json', full);
+  // 出演者プロフィール: active の作品に出てくる出演者だけ（画像URLは保存していないので出ない）
+  const appearing = new Set(works.flatMap((w) => w.actresses.map((a) => String(a.id))));
+  // 該当が0件のときはファイルを作らず、前回の古い出力も消す（プロフィール未取り込みの環境の出力を増やさない）
+  const profiles = db.listActressProfiles().filter((a) => appearing.has(a.id));
+  if (profiles.length > 0) write('actresses.json', profiles); else rmSync(join(outDir, 'actresses.json'), { force: true });
   write('meta.json', meta);
   const names = (pick: (w: Work) => { name: string }[]): string[] => [...new Set(works.flatMap((w) => pick(w).map((r) => r.name)))].sort();
   write('index.json', {

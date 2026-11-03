@@ -5,9 +5,9 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { Similar, Work, WorkStatus } from './types.ts';
-import { REF_PROPS, SCHEMA_SQL, UPSERT_WORK_SQL, loadWorks, workToParams } from './db-schema.ts';
-import type { SqlValue, WorkRow } from './db-schema.ts';
+import type { ActressProfile, Similar, Work, WorkStatus } from './types.ts';
+import { REF_PROPS, SCHEMA_SQL, UPSERT_ACTRESS_SQL, UPSERT_WORK_SQL, actressToParams, loadWorks, rowToActress, workToParams } from './db-schema.ts';
+import type { ActressProfileRow, SqlValue, WorkRow } from './db-schema.ts';
 
 export type ListOptions = { status?: WorkStatus; limit?: number; offset?: number };
 
@@ -28,6 +28,9 @@ export type Db = {
   getLabels(contentId: string): string[]; // 登録した順
   replaceSimilar(entries: Similar[]): void;
   getSimilar(contentId: string): Similar[]; // score の高い順
+  upsertActressProfiles(profiles: ActressProfile[]): number; // 追加または更新。処理した件数を返す
+  getActressProfile(id: string): ActressProfile | null;
+  listActressProfiles(): ActressProfile[]; // id 昇順
   setMeta(key: string, value: string): void;
   getMeta(key: string): string | null;
   close(): void;
@@ -72,6 +75,9 @@ export function openDb(path: string): Db {
     WHERE content_id = ? ORDER BY score DESC, similar_id`);
   const putMeta = q('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
   const readMeta = q('SELECT value FROM meta WHERE key = ?');
+  const upsertActress = q(UPSERT_ACTRESS_SQL);
+  const selectActress = q('SELECT * FROM actress_profiles WHERE id = ?');
+  const selectActresses = q('SELECT * FROM actress_profiles ORDER BY id');
   let closed = false;
 
   /** 書き込みをひとまとめにする。途中で失敗したら全部巻き戻す */
@@ -180,6 +186,20 @@ export function openDb(path: string): Db {
     getSimilar(contentId) {
       const rows = selectSimilar.all(contentId) as { content_id: string; similar_id: string; score: number }[];
       return rows.map((r) => ({ contentId: r.content_id, similarId: r.similar_id, score: r.score }));
+    },
+
+    upsertActressProfiles(profiles) {
+      return tx(() => {
+        for (const a of profiles) upsertActress.run(...actressToParams(a));
+        return profiles.length;
+      });
+    },
+    getActressProfile(id) {
+      const row = selectActress.get(id) as ActressProfileRow | undefined;
+      return row ? rowToActress(row) : null;
+    },
+    listActressProfiles() {
+      return (selectActresses.all() as ActressProfileRow[]).map(rowToActress);
     },
 
     setMeta(key, value) {

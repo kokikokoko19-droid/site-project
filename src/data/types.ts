@@ -94,3 +94,24 @@ export type WorkCardRecord = {
   rk: number | null;      // rankPosition
   lb: DerivedLabel[];     // 派生ラベル
 };
+
+/**
+ * 出演者のプロフィール（ActressSearch 由来）。
+ * 顔写真（imageURL）は規約上使わないため、型にも保存にも含めない。
+ */
+export type ActressProfile = {
+  id: string;
+  name: string;
+  ruby: string | null;
+  birthday: string | null;
+  bloodType: string | null;
+  hobby: string | null;
+  prefectures: string | null;
+  height: number | null;
+  bust: number | null;
+  waist: number | null;
+  hip: number | null;
+  cup: string | null;
+  listUrl: string | null; // listURL の digital を優先し、無ければ他の値
+  fetchedAt: string; // ISO 8601 日時
+};

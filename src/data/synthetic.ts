@@ -192,3 +192,37 @@ export function syntheticItemList(
     },
   };
 }
+
+/**
+ * ActressSearch の外枠つきレスポンスを合成する（ids の順に1人ずつ）。
+ * 欠損パターンを id と seed から決定的に混ぜる（birthday null、hobby ""、cup キー欠落、数値の文字列化など）。
+ * imageURL は実 API に合わせて付けるが、取り込み側で捨てる想定（ダミーの無効ドメイン）。
+ */
+export function syntheticActressList({ ids, seed = 1 }: { ids: string[]; seed?: number }): any {
+  const actress = ids.map((id, k) => {
+    const r = makeRng(seed, Number(id) || k + 1);
+    const chance = (p: number): boolean => r() < p;
+    const int = (lo: number, hi: number): number => lo + Math.floor(r() * (hi - lo + 1));
+    const o: Record<string, unknown> = {
+      id: String(id), name: `出演者${alpha(k)}`, ruby: `しゅつえんしゃ${alpha(k).toLowerCase()}`,
+      bust: String(int(75, 95)), waist: String(int(55, 70)), hip: String(int(78, 95)), height: String(int(145, 172)),
+      birthday: `${int(1985, 2004)}-${pad2(int(1, 12))}-${pad2(int(1, 28))}`,
+      blood_type: ['A', 'B', 'O', 'AB'][int(0, 3)], hobby: '読書', prefectures: '東京都',
+      cup: 'ABCDEFG'[int(0, 6)],
+      imageURL: { small: `https://example.invalid/actress/${id}_s.jpg`, large: `https://example.invalid/actress/${id}.jpg` },
+      listURL: { digital: `https://example.invalid/list/${id}`, monthly: '', mono: '' },
+    };
+    if (chance(0.3)) o.birthday = null;
+    if (chance(0.3)) o.hobby = '';
+    if (chance(0.3)) delete o.cup;
+    if (chance(0.15)) o.prefectures = '';
+    if (chance(0.15)) o.blood_type = null;
+    if (chance(0.15)) { o.bust = ''; o.waist = ''; o.hip = ''; }
+    if (chance(0.15)) delete o.ruby;
+    return o;
+  });
+  return {
+    request: { parameters: { api_id: 'dummy', affiliate_id: 'dummy-990', hits: String(ids.length), output: 'json' } },
+    result: { status: 200, result_count: actress.length, total_count: actress.length, first_position: 1, actress },
+  };
+}

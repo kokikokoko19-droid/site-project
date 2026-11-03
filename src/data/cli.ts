@@ -1,7 +1,7 @@
 /**
  * データ層の CLI。使い方: node --experimental-strip-types src/data/cli.ts <command> [--flags]
  *   ingest  FANZA API から取り込む。直近の取り込み（--recent-days N、既定 7）に続けて、--follow（config/follow.json の指定軸の全作品。--follow-config で変更）、--refresh（取り込み済みの再取得）、
- *           --ranked-pages N（人気順の上位 N ページ）を行う。--synthetic N なら API を使わず合成データ N 件だけを入れる
+ *           --ranked-pages N（人気順の上位 N ページ）、--actress-profiles（works の出演者のプロフィール）を行う。--synthetic N なら API を使わず合成データ N 件だけを入れる
  *   derive  ラベル・似た作品・ランキング・今日の候補を再計算する
  *   export  探索UI・ページ生成用の JSON を出力する
  *   all     ingest（上と同じフラグ）→ derive → export
@@ -15,11 +15,12 @@ import { openDb } from './db.ts';
 import type { Db } from './db.ts';
 import { runDerive } from './derive.ts';
 import { exportAll } from './export.ts';
+import { ingestActressProfiles, ingestSyntheticActressProfiles } from './ingest-actress.ts';
 import { ingestFollowed, loadFollowConfig } from './ingest-follow.ts';
 import { ingestRanked, ingestRecent, ingestSynthetic, refreshExisting } from './ingest.ts';
 
 const USAGE = `使い方: node --experimental-strip-types src/data/cli.ts <command> [--flags]
-  ingest  [--recent-days N] [--follow [--follow-config PATH]] [--refresh] [--ranked-pages N] [--synthetic N]
+  ingest  [--recent-days N] [--follow [--follow-config PATH]] [--refresh] [--ranked-pages N] [--actress-profiles] [--synthetic N]
   derive
   export
   all     （ingest と同じフラグ。ingest → derive → export）
@@ -28,7 +29,7 @@ const USAGE = `使い方: node --experimental-strip-types src/data/cli.ts <comma
 /** 使い方・設定の誤り（終了コード 2） */
 class UsageError extends Error {}
 
-type Flags = { follow: boolean; followConfig: string; recentDays: number; refresh: boolean; rankedPages: number | null; synthetic: number | null };
+type Flags = { follow: boolean; followConfig: string; recentDays: number; refresh: boolean; rankedPages: number | null; actressProfiles: boolean; synthetic: number | null };
 
 /** フラグの整数を読む（未指定なら fallback） */
 function toInt(name: string, v: string | undefined, fallback: number | null, min: number): number | null {
@@ -42,7 +43,7 @@ function parseCli(argv: string[]): { command: string | undefined; flags: Flags; 
     const { values, positionals } = parseArgs({
       args: argv, allowPositionals: true,
       options: {
-        'recent-days': { type: 'string' }, refresh: { type: 'boolean' }, follow: { type: 'boolean' }, 'follow-config': { type: 'string' }, 'ranked-pages': { type: 'string' },
+        'recent-days': { type: 'string' }, refresh: { type: 'boolean' }, follow: { type: 'boolean' }, 'follow-config': { type: 'string' }, 'ranked-pages': { type: 'string' }, 'actress-profiles': { type: 'boolean' },
         synthetic: { type: 'string' }, help: { type: 'boolean', short: 'h' },
       },
     });
@@ -50,6 +51,7 @@ function parseCli(argv: string[]): { command: string | undefined; flags: Flags; 
     const flags: Flags = {
       follow: values.follow === true, followConfig: values['follow-config'] ?? 'config/follow.json',
       recentDays: toInt('recent-days', values['recent-days'], 7, 0) as number, refresh: values.refresh === true,
+      actressProfiles: values['actress-profiles'] === true,
       rankedPages: toInt('ranked-pages', values['ranked-pages'], null, 1), synthetic: toInt('synthetic', values.synthetic, null, 1),
     };
     return { command: positionals[0], flags, help: values.help === true };
@@ -76,6 +78,10 @@ async function runIngest(db: Db, f: Flags): Promise<void> {
   if (f.synthetic !== null) {
     log(`[ingest] 合成データ ${f.synthetic} 件を取り込みます`);
     log(`[ingest] 完了: ${summary(await ingestSynthetic(db, { count: f.synthetic, onProgress }))}`);
+    if (f.actressProfiles) { // 合成の works に出てくる出演者全員分を合成する
+      log('[ingest] 出演者プロフィール（合成）を取り込みます');
+      log(`[ingest] 完了: ${summary(await ingestSyntheticActressProfiles(db, { onProgress }))}`);
+    }
     return;
   }
   const client = createClient({ apiId: process.env.FANZA_API_ID as string, affiliateId: process.env.FANZA_AFFILIATE_ID as string });
@@ -92,6 +98,10 @@ async function runIngest(db: Db, f: Flags): Promise<void> {
   if (f.rankedPages !== null) { // 順位は最後に付ける（後の upsert で消さないため）
     log(`[ingest] 人気順の上位 ${f.rankedPages} ページを取り込みます`);
     log(`[ingest] 完了: ${summary(await ingestRanked(client, db, { pages: f.rankedPages, onProgress }))}`);
+  }
+  if (f.actressProfiles) { // 出演者は作品の取り込みが済んでから
+    log('[ingest] 出演者プロフィールを取り込みます');
+    log(`[ingest] 完了: ${summary(await ingestActressProfiles(client, db, { onProgress }))}`);
   }
 }
 
