@@ -1,21 +1,38 @@
 ---
-// トップ。構成は docs/02_設計方針.md の 2.1 と mocks/top.html に合わせる。
-// 運営者から／今日の発見／軸から探す／特集とガイド／新着／セール中
+// トップ。構成は docs/02_設計方針.md の 2.1 と mocks/v2/top.html に合わせる。
+// 表紙型ヒーロー（今週の1本）／運営者の手紙／今日の発見／索引（軸の入口）／特集とガイド／新着の棚／セール中の棚
 import Base from '../layouts/Base.astro';
 import AdSlot from '../components/AdSlot.astro';
 import { getCollection } from 'astro:content';
 import ArticleCard from '../components/ArticleCard.astro';
-import WorkGrid from '../components/WorkGrid.astro';
+import Mark from '../components/Mark.astro';
+import Shelf from '../components/Shelf.astro';
+import WorkCard from '../components/WorkCard.astro';
 import { loadCatalog } from '../lib/catalog.ts';
+import { toCard } from '../lib/card.ts';
+import { cardText } from '../lib/autotext.ts';
+import { fmtDate, minutes, ymd } from '../lib/format.ts';
 
 const catalog = loadCatalog();
 
-// 今日の発見は meta.todays の3件。無ければ「高評価」ラベルの作品
-const todays = catalog.todays(3);
-const discoveries = todays.length > 0 ? todays : catalog.byLabel('高評価', 3);
+// 今週の1本（表紙型ヒーロー）。「高評価」ラベルの先頭、無ければ今日の発見の先頭、さらに無ければ新着の先頭
+const hero = catalog.byLabel('高評価', 1)[0] ?? catalog.todays(1)[0] ?? catalog.recent(1)[0] ?? null;
+// 今日の発見は meta.todays の作品（無ければ「高評価」ラベル）から、ヒーローと重ならない3件
+const pool = catalog.todays(4);
+const discoveries = (pool.length > 0 ? pool : catalog.byLabel('高評価', 4)).filter((w) => w !== hero).slice(0, 3);
 
-// 軸の入口。軸の一覧ページは無いので、件数と、作品数の多い12件を名前チップで出す
-const TOP_AXES = 12;
+// ヒーローの表示。表紙は横長の大きいジャケット（imageLarge）。無ければ一覧用、さらに無ければ無地の枠
+const heroCover = hero ? hero.imageLarge || hero.imageList || null : null;
+const heroCast = hero ? hero.actresses.map((a) => a.name).join('、') || hero.makers[0]?.name || '' : '';
+const heroMaker = hero?.makers[0]?.name ?? '';
+const heroMin = hero ? minutes(hero.volumeMin) : '';
+const heroRated = hero ? hero.reviewCount > 0 && typeof hero.reviewAvg === 'number' && Number.isFinite(hero.reviewAvg) : false;
+
+// 運営者の手紙の日付は、データの最終取り込み日
+const letterDate = fmtDate(ymd(catalog.meta.lastIngestAt));
+
+// 索引（軸の入口）。軸の一覧ページは無いので、件数と、作品数の多い上位5件を出す
+const TOP_AXES = 5;
 const axes = [
   { key: 'actress', label: '出演者', unit: '人', index: catalog.byActress, names: catalog.refNames.actress },
   { key: 'series', label: 'シリーズ', unit: '件', index: catalog.bySeries, names: catalog.refNames.series },
@@ -57,94 +74,130 @@ const guidePlaceholders = [
   description="AV女優とおすすめ作品を見て回るカタログ。出演者・シリーズ・メーカー・ジャンルの軸から探せます。今日の発見、新着、セール中の作品も確認できます。"
   dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
 >
-  <section class="section">
-    {/* ページの見出し（h1）。ロゴはリンクなので、検索向けに説明文を h1 にする */}
-    <h1 class="site-lead">AV女優とおすすめ作品を見て回るカタログ</h1>
-    <div class="editorial">
-      <div class="who">運営者から</div>
-      <!-- TODO: 運営者が記入（今週見たもの、気づいたこと、サイトの使い方を数行で） -->
-      <p>（ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。自動生成ではなく、人の声が最初に目に入るようにします。）</p>
-    </div>
-  </section>
+  {/* ページの見出し（h1）。ロゴはリンクなので、検索向けに説明文を h1 にする */}
+  <h1 class="site-lead">AV女優とおすすめ作品を見て回るカタログ</h1>
 
-  <section class="section">
-    <div class="section-head">
-      <h2>今日の発見<span class="muted" style="margin-left: 8px">評価と定番から選んだ作品</span></h2>
-      <a href="/explore/">もっと見る</a>
-    </div>
-    <WorkGrid works={discoveries} empty="作品データを準備中です。" />
-  </section>
-
-  <section class="section">
-    <div class="section-head">
-      <h2>軸から探す</h2>
-      <a href="/explore/">探索ページへ</a>
-    </div>
-    <div class="entry">
-      {axes.map((a) => (
-        <a href="/explore/"><b>{a.label}</b><span>{a.total}{a.unit}</span></a>
-      ))}
-    </div>
-    <div style="display: grid; gap: 24px; margin-top: 24px">
-      {axes.filter((a) => a.top.length > 0).map((a) => (
-        <div style="display: grid; gap: 8px">
-          <h3>{a.label}<span class="muted" style="margin-left: 8px">作品数の多い順</span></h3>
-          <div class="chips">
-            {a.top.map((t) => (
-              <a class="chip" href={`/${a.key}/${t.id}/`}>{t.name}<span class="n">{t.count}</span></a>
-            ))}
+  {
+    hero && (
+      <section class="cover-hero" aria-labelledby="hero-title">
+        <div class:list={['thumb', 'wide']}>
+          {heroCover && <img src={heroCover} alt="" decoding="async" fetchpriority="high" />}
+        </div>
+        <div class="text">
+          <span class="eyebrow"><Mark />今週の1本　運営者が選ぶ</span>
+          <h2 id="hero-title">{hero.title}</h2>
+          {cardText(hero) && <p class="lead">{cardText(hero)}</p>}
+          <div class="hero-meta">
+            {heroCast && <span>出演 <b>{heroCast}</b></span>}
+            {heroMaker && <span>メーカー <b>{heroMaker}</b></span>}
+            {heroMin && <span>収録 <b class="num">{heroMin}</b></span>}
+            {heroRated && <span>評価 <b class="num">★ {hero.reviewAvg!.toFixed(1)}</b> <span class="dim">{hero.reviewCount}件</span></span>}
           </div>
+          <div class="actions">
+            <a class="btn btn-cta" href={`/v/${hero.contentId}/`}>作品ページを見る</a>
+            <a class="btn" href="/explore/?lab=%E9%AB%98%E8%A9%95%E4%BE%A1">高評価の作品を探す</a>
+          </div>
+        </div>
+      </section>
+    )
+  }
+
+  <section class="section">
+    <div class="letter">
+      <div>
+        <div class="from">運営者から</div>
+        <!-- TODO: 運営者が記入（今週見たもの、気づいたこと、サイトの使い方を数行で） -->
+        <p>（ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。自動生成ではなく、人の声が最初に目に入るようにします。）</p>
+        <div class="date">{letterDate && <>{letterDate}　</>}AVめぐり 編集</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>今日の発見</h2><span class="sub">評価と定番から選んだ作品</span>
+      <a href="/explore/">もっと見る →</a>
+    </div>
+    {
+      discoveries.length > 0 ? (
+        <div class="finds">
+          {discoveries.map((w) => <WorkCard work={toCard(w)} variant="find" />)}
+        </div>
+      ) : (
+        <div class="empty"><p>作品データを準備中です。</p></div>
+      )
+    }
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <h2>索引</h2><span class="sub">出演者・シリーズ・メーカー・ジャンルから</span>
+    </div>
+    {/* .entry は計測（analytics/events.js の axis_nav）が見るクラス */}
+    <div class="index entry">
+      {axes.map((a) => (
+        <div>
+          <h3>{a.label}<b>{a.total}{a.unit}</b></h3>
+          {
+            a.top.length > 0 && (
+              <ol>
+                {a.top.map((t) => (
+                  <li><a href={`/${a.key}/${t.id}/`}>{t.name}<span>{t.count}作品</span></a></li>
+                ))}
+              </ol>
+            )
+          }
+          <a class="more" href="/explore/">{a.label}を探索で見る →</a>
         </div>
       ))}
     </div>
   </section>
 
   <section class="section">
-    <div class="section-head" style="flex-wrap: wrap">
-      <h2>特集とガイド<span class="muted" style="margin-left: 8px">運営者が選び、運営者が書く</span></h2>
-      <span class="row"><a href="/feature/">特集一覧</a><a href="/guide/">ガイド一覧</a></span>
+    <div class="section-head">
+      <h2>特集とガイド</h2><span class="sub">運営者が選び、運営者が書く</span>
+      <span class="row"><a href="/feature/">特集一覧 →</a><a href="/guide/">ガイド一覧 →</a></span>
     </div>
-    <div class="hub">
-      {features.length > 0
-        ? features.map((e) => (
-            <ArticleCard href={`/feature/${e.id}/`} title={e.data.title} description={e.data.description} date={e.data.date} kind="特集" draft={e.data.draft} />
-          ))
-        : featurePlaceholders.map((f) => (
-            <a href="/feature/"><span class="kind">特集 ・ 準備中</span><span class="title">{f.title}</span><span class="muted">{f.text}</span></a>
-          ))}
-    </div>
-    <div style="height: 16px"></div>
-    <div class="hub three">
-      {guides.length > 0
-        ? guides.map((e) => (
-            <ArticleCard href={`/guide/${e.id}/`} title={e.data.title} description={e.data.description} date={e.data.date} kind="ガイド" draft={e.data.draft} />
-          ))
-        : guidePlaceholders.map((g) => (
-            <a href="/guide/"><span class="kind">ガイド ・ 準備中</span><span class="title">{g.title}</span><span class="muted">{g.text}</span></a>
-          ))}
+    <div class="hub2">
+      <div class="hub">
+        {features.length > 0
+          ? features.map((e) => (
+              <ArticleCard href={`/feature/${e.id}/`} title={e.data.title} description={e.data.description} date={e.data.date} kind="特集" draft={e.data.draft} />
+            ))
+          : featurePlaceholders.map((f) => (
+              <a href="/feature/"><span class="kind">特集 ・ 準備中</span><span class="title">{f.title}</span><span class="muted">{f.text}</span></a>
+            ))}
+      </div>
+      <div>
+        <span class="eyebrow">ガイド</span>
+        <div class="guides" style="margin-top: 8px">
+          {guides.length > 0
+            ? guides.map((e) => (
+                <a href={`/guide/${e.id}/`}><span><b>{e.data.title}</b>{e.data.draft && <span class="badge-draft">下書き</span>}<br /><span>{e.data.description}</span></span><i aria-hidden="true">→</i></a>
+              ))
+            : guidePlaceholders.map((g) => (
+                <a href="/guide/"><span><b>{g.title}</b><br /><span>{g.text}</span></span><i aria-hidden="true">→</i></a>
+              ))}
+        </div>
+      </div>
     </div>
   </section>
 
   <section class="section">
     <div class="section-head">
-      <h2>新着<span class="muted" style="margin-left: 8px">直近の配信開始</span></h2>
-      <a href="/new/">もっと見る</a>
+      <h2>新着</h2><span class="sub">直近の配信開始</span>
+      <a href="/new/">もっと見る →</a>
     </div>
-    <WorkGrid works={catalog.recent(5)} empty="作品データを準備中です。" />
+    <Shelf works={catalog.recent(10)} sub="date" label="新着の作品" empty="作品データを準備中です。" />
   </section>
 
   <section class="section">
     <div class="section-head">
-      <h2>セール中<span class="muted" style="margin-left: 8px">期間限定</span></h2>
-      <a href="/sale/">もっと見る</a>
+      <h2>セール中</h2><span class="sub">期間限定</span>
+      <a href="/sale/">もっと見る →</a>
     </div>
-    <WorkGrid works={catalog.onSale(5)} empty="現在セール中の作品はありません。" />
+    <Shelf works={catalog.onSale(10)} tag label="セール中の作品" empty="現在セール中の作品はありません。" />
   </section>
 
   <AdSlot name="top-bottom" />
 </Base>
-
-<style>
-  /* h1 だがロゴを主役にするため控えめに。本文の導入文と同じ大きさ */
-  .site-lead { margin: 0 0 12px; font-size: 15px; font-weight: 500; color: var(--muted); letter-spacing: 0.02em; }
-</style>

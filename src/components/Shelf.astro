@@ -1,0 +1,45 @@
+---
+// 棚（横にめくる表紙の並び）。見た目は mocks/v2 の .shelf。新着・セール中・似た作品で使う。
+// セールのときは tag を付けると、表紙の角に値札（セール価格と、取り消し線の定価）が出る。
+// 文言は自動文だけで、公式の紹介文やレビュー本文は使わない。
+import type { CatalogWork } from '../lib/catalog.ts';
+import { toCard } from '../lib/card.ts';
+import { fmtDate } from '../lib/format.ts';
+import WorkCard from './WorkCard.astro';
+
+interface Props {
+  works: CatalogWork[];
+  /** セール中の作品に値札を付ける */
+  tag?: boolean;
+  /** 題名の下の1行。who: 出演者（既定）／date: 配信開始日 */
+  sub?: 'who' | 'date';
+  /** 作品が0件のときに出す文言 */
+  empty?: string;
+  /** 棚の読み上げ名 */
+  label?: string;
+}
+
+const { works, tag = false, sub = 'who', empty = '該当する作品がありません。', label = '作品の棚' } = Astro.props;
+
+const cards = works.map((w) => {
+  const date = fmtDate(w.releasedAt);
+  return { work: toCard(w), sub: sub === 'date' && date ? `${date} 配信` : undefined };
+});
+---
+
+{
+  cards.length > 0 ? (
+    <div class="shelf-wrap">
+      {/* 横にスクロールできる領域は、キーボードでも動かせるよう tabindex を付ける */}
+      <div class="shelf" role="region" aria-label={label} tabindex="0">
+        {cards.map((c) => (
+          <WorkCard work={c.work} variant="shelf" tag={tag} sub={c.sub} />
+        ))}
+      </div>
+    </div>
+  ) : (
+    <div class="empty">
+      <p>{empty}</p>
+    </div>
+  )
+}

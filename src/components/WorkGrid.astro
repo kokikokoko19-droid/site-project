@@ -2,7 +2,7 @@
 // 作品カードの格子。作品の配列を受け取り、WorkCard の表示形に直して .grid に並べる。
 // 文言は自動文（データ駆動テンプレ）だけで、公式の紹介文やレビュー本文は使わない。
 import type { CatalogWork } from '../lib/catalog.ts';
-import { cardText } from '../lib/autotext.ts';
+import { toCard } from '../lib/card.ts';
 import WorkCard from './WorkCard.astro';
 
 interface Props {
@@ -13,19 +13,8 @@ interface Props {
 
 const { works, empty = '該当する作品がありません。' } = Astro.props;
 
-// データ層の Work から、カードに必要な項目だけを取り出す（対応表は WorkCard.astro の冒頭を参照）
-const cards = works.map((w) => ({
-  work: {
-    id: w.contentId,
-    title: w.title,
-    imageSmall: w.imageSmall,
-    actresses: w.actresses.map((a) => a.name),
-    maker: w.makers[0]?.name ?? null,
-    cardText: cardText(w),
-    labels: w.derivedLabels,
-  },
-  href: `/v/${w.contentId}/`,
-}));
+// データ層の Work から、カードに必要な項目だけを取り出す（対応は lib/card.ts の toCard）
+const cards = works.map((w) => ({ work: toCard(w), href: `/v/${w.contentId}/` }));
 ---
 
 {
@@ -45,7 +34,7 @@ const cards = works.map((w) => ({
 <style is:global>
   /* .chip は button 向けの指定（高さ・余白・文字の位置）なので、a 要素のリンクとして使うときの表示をここで補う。
      チップをリンクにするページ（トップ・軸ページ・ランキング）はどれも WorkGrid を使うので、ここに置く。
-     本来は common.css に移すのが望ましい。 */
+     （v2 では .chip の見た目は common.css 側。ここは a 要素向けの補足だけ） */
   a.chip {
     display: inline-flex;
     align-items: center;

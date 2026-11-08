@@ -1,86 +1,82 @@
 ---
-// 作品カード。見た目は mocks/ui.js の card() と同じ。
+// 作品カード。見た目は mocks/v2/ui.js の card() / shelfCard() / find() と同じ。箱で囲まず、表紙と文字だけ。
 // 画像は公式配信の直リンクをそのまま表示する。規約により加工は拡大縮小のみ（切り取りもしない）。
-// 型は表示に使う項目だけを持つ（表示用の形）。データ層の型（src/data/types.ts）とは呼び出し側で対応づける。
-//   Work           → id: contentId, imageSmall, actresses: actresses.map(a => a.name), maker: makers[0]?.name
-//   WorkCardRecord → id, title: t, imageSmall: img, actresses: a, maker: m, labels: lb
-// labels には派生ラベル（新作・高評価など）を渡す。Work.labels はレーベル名で別物なので渡さない。
+// 型は表示に使う項目だけを持つ（表示用の形）。データ層の型からの変換は src/lib/card.ts の toCard()。
+// 探索ページのカードは public/explorer/explorer-view.js が同じ形のHTMLを描く（見た目を変えるときは両方を直す）。
+import { yen } from '../lib/format.ts';
+
 interface WorkCardData {
   /** 作品ID（content_id）。作品ページ /v/{id}/ のURLに使う */
   id: string;
   title: string;
-  /** 公式配信の小サイズ画像のURL（直リンク）。無い（null）ときは色の枠を出す */
+  /** 公式配信の小サイズ画像のURL（直リンク）。無い（null）ときは無地の枠を出す */
   imageSmall?: string | null;
   /** 出演者名。無ければメーカー名を出す */
   actresses?: string[];
   maker?: string | null;
-  /** 自動文の1行（データ駆動テンプレ）。無ければ出さない */
+  /** 自動文の1行（データ駆動テンプレ）。variant="find"（今日の発見）で理由として出す */
   cardText?: string | null;
-  /** ルールラベル。先頭から最大3つ表示する */
+  /** ルールラベル。先頭から最大2つを、文字だけで出す */
   labels?: string[];
+  reviewAvg?: number | null;
+  reviewCount?: number;
+  /** セール中の価格と定価。tag を指定したときだけ値札にする */
+  sale?: { price: number; list: number } | null;
 }
 
 interface Props {
   work: WorkCardData;
   /** 作品ページ以外へ飛ばしたいときだけ指定する */
   href?: string;
+  /** grid: 格子用（既定）／shelf: 棚用（題名と1行だけ）／find: 今日の発見（理由つき） */
+  variant?: 'grid' | 'shelf' | 'find';
+  /** shelf のとき、セール中の作品に値札を付ける */
+  tag?: boolean;
+  /** shelf のとき、出演者の代わりに出す1行（例: 配信日） */
+  sub?: string;
 }
 
-const { work, href = `/v/${work.id}/` } = Astro.props;
+const { work, href = `/v/${work.id}/`, variant = 'grid', tag = false, sub } = Astro.props;
 
-const MAX_LABELS = 3;
+const MAX_LABELS = 2;
 // 目立たせるラベル（モックと同じ）
 const HOT = new Set(['高評価', 'セール中', '初見向け']);
 
-const hasImage = Boolean(work.imageSmall);
 const meta = work.actresses?.length ? work.actresses.join('、') : work.maker;
 const labels = (work.labels ?? []).slice(0, MAX_LABELS);
-
-// 画像が無いときの色の枠。IDから色相を決める（モックの thumbStyle と同じ計算）
-const hash = (s: string) => {
-  let h = 0;
-  for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return h;
-};
-const hue = hash(work.id) % 360;
-const frame = `background: linear-gradient(145deg, hsl(${hue} 28% 30%), hsl(${(hue + 40) % 360} 24% 16%));`;
+const rated = typeof work.reviewAvg === 'number' && (work.reviewCount ?? 0) > 0;
+const showTag = variant === 'shelf' && tag && work.sale;
 ---
 
-<a class="card" href={href}>
-  <div class:list={['thumb', { 'has-img': hasImage }]} style={hasImage ? undefined : frame}>
+<a class:list={['card', { find: variant === 'find' }]} href={href}>
+  {showTag && <span class="tag">{yen(work.sale!.price)}<s>{yen(work.sale!.list)}</s></span>}
+  <div class="thumb">
     {/* タイトルは同じリンク内の文字で伝わるので、画像の代替テキストは空にする */}
-    {hasImage && <img src={work.imageSmall} alt="" loading="lazy" decoding="async" />}
+    {work.imageSmall && <img src={work.imageSmall} alt="" loading="lazy" decoding="async" />}
   </div>
-  <div class="card-body">
-    <div class="card-title">{work.title}</div>
-    {meta && <div class="card-meta">{meta}</div>}
-    {work.cardText && <div class="card-line">{work.cardText}</div>}
-    {
-      labels.length > 0 && (
-        <div class="labels">
-          {labels.map((l) => (
-            <span class:list={['label', { hot: HOT.has(l) }]}>{l}</span>
-          ))}
-        </div>
-      )
-    }
-  </div>
+  {
+    variant === 'find' ? (
+      <div>
+        {meta && <div class="who">{meta}</div>}
+        <h3>{work.title}</h3>
+        {work.cardText && <p class="why">{work.cardText}</p>}
+        {rated && <div class="rate">★ {work.reviewAvg!.toFixed(1)} <span class="dim">{work.reviewCount}件</span></div>}
+      </div>
+    ) : (
+      <div class="card-body">
+        <div class="card-title">{work.title}</div>
+        {(sub ?? meta) && <div class="card-meta">{sub ?? meta}</div>}
+        {variant === 'grid' && rated && <div class="rate">★ {work.reviewAvg!.toFixed(1)} <span class="dim">{work.reviewCount}件</span></div>}
+        {
+          variant === 'grid' && labels.length > 0 && (
+            <div class="labels">
+              {labels.map((l) => (
+                <span class:list={['label', { hot: HOT.has(l) }]}>{l}</span>
+              ))}
+            </div>
+          )
+        }
+      </div>
+    )
+  }
 </a>
-
-<style is:global>
-  /* is:global にする理由: scoped だとカード1枚ごとに全要素へ属性が付き、1万ページ規模でHTMLが膨らむ。
-     クラス名（.thumb.has-img）はこの部品でしか使わないので衝突しない */
-  /* 画像あり。枠の比率（3:4）は固定し、画像は切り取らずに全体を収める */
-  .thumb.has-img {
-    position: relative;
-    padding: 0;
-    background: var(--bg2);
-  }
-  .thumb.has-img img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-</style>
