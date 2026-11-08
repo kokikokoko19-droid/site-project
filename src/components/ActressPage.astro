@@ -13,7 +13,7 @@ import { loadCatalog } from '../lib/catalog.ts';
 import type { CatalogWork } from '../lib/catalog.ts';
 import { actressStats, globalMeanAvg, workBayes } from '../lib/actress-stats.ts';
 import { actressIntro, actressSummary } from '../lib/autotext-actress.ts';
-import { cardText } from '../lib/autotext.ts';
+import { toCard } from '../lib/card.ts';
 
 interface Props {
   id: string;
@@ -44,16 +44,8 @@ const seriesTop = stats.series.slice(0, 5);
 const coStars = stats.coStars.slice(0, 8);
 const shown = works.slice(0, MAX_ALL);
 
-// WorkGrid と同じ対応で、カードの表示形にする
-const card = (w: CatalogWork) => ({
-  id: w.contentId,
-  title: w.title,
-  imageSmall: w.imageSmall,
-  actresses: w.actresses.map((a) => a.name),
-  maker: w.makers[0]?.name ?? null,
-  cardText: cardText(w),
-  labels: w.derivedLabels,
-});
+// WorkGrid と同じ対応（lib/card.ts の toCard）で、カードの表示形にする
+const card = toCard;
 
 const toc = [
   { id: 'profile', label: 'プロフィール' },
@@ -112,7 +104,7 @@ const score = (n: number) => n.toFixed(2);
         {top.map((t, i) => (
           <li class="rank-item">
             <div class="rank-head">
-              <span class="rank-no" aria-label={`${i + 1}位`}>{i + 1}</span>
+              <span class="rank-no" role="img" aria-label={`${i + 1}位`}>{i + 1}</span>
               <p class="rank-stat">
                 {t.w.reviewAvg !== null && t.w.reviewCount > 0
                   ? `評価 ${score(t.w.reviewAvg)}（レビュー${t.w.reviewCount}件）`
