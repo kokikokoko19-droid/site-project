@@ -1,0 +1,104 @@
+# 実データの確認（Smoke）。作業ブランチで、FANZA API からの小さな取り込み → 派生計算 → 書き出し → ビルドを一度だけ通す。
+# daily.yml にも手動実行（workflow_dispatch）はあるが、GitHub の仕様で既定ブランチ（main）にあるワークフローしか手動実行できない。
+# main にマージする前に実データで確かめるために、このワークフローを置く。
+# 動く条件: コミットメッセージに [smoke] を含む push（main 以外）。push のたびに API を呼ばないための印。main にマージしたあとは手動実行もできる。
+# daily の DB cache（catalog-db-v1-*）には触れない。dist は artifact `dist-smoke` に 3 日残す。配信はしない。
+# 手順は docs/07_運用手順.md の 3.8 節。
+name: Smoke
+
+on:
+  push:
+    branches-ignore:
+      - main
+  workflow_dispatch:
+    inputs:
+      recent_days:
+        description: '直近の取り込み日数（既定 3。確認用なので小さく保つ）'
+        type: string
+        required: false
+        default: '3'
+      ranked_pages:
+        description: '人気順の取り込みページ数（既定 1）'
+        type: string
+        required: false
+        default: '1'
+
+# 同時に 2 つ動かさない（API の呼び出しを重ねない）。
+concurrency:
+  group: smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DB_PATH: data/catalog.sqlite
+  EXPORT_DIR: data/export
+
+jobs:
+  smoke:
+    # push はコミットメッセージに [smoke] があるときだけ。手動実行は常に動く。
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[smoke]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        with:
+          # push しないので git の認証情報は残さない
+          persist-credentials: false
+
+      - name: Node.js を用意
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+
+      - name: 依存を入れる
+        run: npm ci
+
+      # secrets はこのステップと「実データを取り込む」ステップにだけ渡す。
+      - name: API 認証情報の有無を確認
+        env:
+          FANZA_API_ID: ${{ secrets.FANZA_API_ID }}
+          FANZA_AFFILIATE_ID: ${{ secrets.FANZA_AFFILIATE_ID }}
+        run: |
+          if [ -z "$FANZA_API_ID" ] || [ -z "$FANZA_AFFILIATE_ID" ]; then
+            echo "::error title=secrets 不足::FANZA_API_ID と FANZA_AFFILIATE_ID の両方を repository secrets に登録してください（docs/07_運用手順.md の 3.4 節）。"
+            exit 1
+          fi
+          echo "FANZA_API_ID と FANZA_AFFILIATE_ID が両方あります。実データで確認します。"
+          echo "データの取得元: 実データ（FANZA API）。確認用の小さな取り込み" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 実データを取り込む（小さく）
+        env:
+          FANZA_API_ID: ${{ secrets.FANZA_API_ID }}
+          FANZA_AFFILIATE_ID: ${{ secrets.FANZA_AFFILIATE_ID }}
+          # 手動実行のときだけ入力で変えられる。push のときは 3 と 1。
+          RECENT_DAYS: ${{ inputs.recent_days || '3' }}
+          RANKED_PAGES: ${{ inputs.ranked_pages || '1' }}
+        run: npm run ingest -- --recent-days "$RECENT_DAYS" --ranked-pages "$RANKED_PAGES" --actress-profiles
+
+      - name: 派生データを計算する
+        run: npm run derive
+
+      - name: 探索用 JSON を書き出す
+        run: npm run export
+
+      - name: サイトをビルドする
+        # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする
+        run: npm run build
+
+      # 件数と ID だけの要約。タイトルなどの文字列はログに残さない。
+      - name: 取り込み結果の要約
+        run: node scripts/smoke-summary.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: dist を artifact に保存
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-smoke
+          path: dist/
+          retention-days: 3
+          if-no-files-found: error
+          # .htaccess や .well-known など、ドットで始まるファイルも含める
+          include-hidden-files: true
