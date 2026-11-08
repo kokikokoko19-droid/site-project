@@ -1,10 +1,11 @@
 ---
 // 全ページ共通のレイアウト。ヘッダー、PR帯、フッター、年齢確認オーバーレイを持つ。
-// 見た目と振る舞いは mocks/ui.js の shell() に合わせている。
+// 見た目と振る舞いは mocks/v2/ui.js の shell() に合わせている。
 import '../styles/tokens.css';
 import '../styles/common.css';
 import AdSlot from '../components/AdSlot.astro';
 import MobileNav from '../components/MobileNav.astro';
+import Mark from '../components/Mark.astro';
 
 interface Props {
   /** ページ名。後ろにサイト名を付けて <title> にする。未指定ならサイト名のみ */
@@ -107,6 +108,10 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     {/* 配色は暗い表示のみ（設計方針 6.2）。入力欄やスクロールバーも暗くする */}
     <meta name="color-scheme" content="dark" />
+    {/* 見出しの明朝（Shippori Mincho B1）。表示が遅れても代替の明朝で読める（display=swap） */}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;700&display=swap" />
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />
@@ -133,8 +138,9 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
     {/* 年齢確認。本文より先に置き、初回表示で本文が見えてしまうのを防ぐ */}
     <div class="age-gate" id="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-title">
       <div class="age-box">
+        <Mark />
         <h2 id="age-title">年齢確認</h2>
-        <p class="muted">このサイトは成人向けの作品情報を扱います。あなたは18歳以上ですか。</p>
+        <p class="muted">このサイトは成人向けの作品情報を扱います。<br />あなたは18歳以上ですか。</p>
         <div class="row">
           <button class="btn btn-cta" id="age-yes" type="button">18歳以上です</button>
           <button class="btn" id="age-no" type="button">18歳未満です</button>
@@ -160,7 +166,7 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
 
     <header class="site-header">
       <div class="wrap">
-        <a class="logo" href="/">AV<span>めぐり</span></a>
+        <a class="logo" href="/"><Mark />AVめぐり<span class="tagline">{SITE_TAGLINE}</span></a>
         {/* 探索ページ（/explore/）が q を読む。JS なしでも送信できる GET フォーム */}
         <form class="search" action="/explore/" method="get" role="search">
           <input name="q" type="search" placeholder="タイトル・出演者・シリーズ・メーカーで検索" aria-label="検索" />
@@ -182,19 +188,22 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
 
     <footer class="site-footer">
       <div class="wrap">
-        <div class="links">
-          <a href="/about/">運営者情報</a>
-          <a href="/terms/">利用規約</a>
-          <a href="/privacy/">プライバシーポリシー</a>
-          <a href="/removal/">掲載停止のご依頼</a>
-          <a href="/about/#contact">お問い合わせ</a>
+        <div class="cols">
+          <div>
+            <div class="brand"><Mark />{SITE_NAME}</div>
+            <p>{SITE_TAGLINE}。画像と動画は公式配信の直リンクで、転載も加工もしていません。18歳未満の方の閲覧はお断りします。</p>
+            <p>データ更新: {updated ? <time datetime={updated.iso}>{updated.text}</time> : '準備中'}</p>
+            {/* クレジット表記は DMM Web サービスの規定どおり（docs/10）。文言とリンク先は改変しない */}
+            <p class="credit">Powered by <a href="https://affiliate.dmm.com/api/">FANZA Webサービス</a></p>
+          </div>
+          <div class="links">
+            <a href="/about/">運営者情報</a>
+            <a href="/terms/">利用規約</a>
+            <a href="/privacy/">プライバシーポリシー</a>
+            <a href="/removal/">掲載停止のご依頼</a>
+            <a href="/about/#contact">お問い合わせ</a>
+          </div>
         </div>
-        {/* クレジット表記は DMM Web サービスの規定どおり（docs/10）。文言とリンク先は改変しない */}
-        <p>
-          データ更新: {updated ? <time datetime={updated.iso}>{updated.text}</time> : '準備中'}
-          ／18歳未満の方の閲覧はお断りします。
-        </p>
-        <p>Powered by <a href="https://affiliate.dmm.com/api/">FANZA Webサービス</a></p>
         {/* scoped な <style> は全要素に属性が付き、HTMLが膨らむので、モックと同じ inline style にする */}
         <div style="margin-top: 16px"><AdSlot name="footer" /></div>
       </div>

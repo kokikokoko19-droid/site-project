@@ -1,0 +1,14 @@
+---
+// 印（朱印風のロゴマーク）。mocks/v2/ui.js の mark() と同じ図形をインラインSVGで出す。
+// 色と書体は tokens.css の変数（--seal, --font-display）を使う。装飾なので読み上げ対象から外す。
+interface Props {
+  /** SVG に付けるクラス。大きさは common.css の .mark と、置き場所ごとの指定で決まる */
+  class?: string;
+}
+const { class: cls = 'mark' } = Astro.props;
+---
+
+<svg class={cls} viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+  <circle cx="16" cy="16" r="13.6" fill="none" stroke="var(--seal)" stroke-width="2.2" stroke-dasharray="48 2.5 22 1.5 10 1.2" transform="rotate(-24 16 16)"></circle>
+  <text x="16" y="21.6" text-anchor="middle" font-size="15.5" font-weight="700" fill="var(--seal)" style="font-family: var(--font-display)">巡</text>
+</svg>
