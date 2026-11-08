@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="common.css">
+<title>作品 | AVめぐり（モック v2）</title>
+</head>
+<body>
+<main class="wrap" id="main"></main>
+<script src="../data.js"></script>
+<script src="ui.js"></script>
+<script>
+(function () {
+  const M = window.MOCK, UI = window.UI;
+  UI.shell('work');
+  const id = new URLSearchParams(location.search).get('id');
+  const w = M.byId[id] || M.works[0];
+  document.title = w.title + ' | AVめぐり（モック v2）';
+  document.getElementById('main').innerHTML = `
+    <div class="crumb"><a href="top.html">トップ</a><span>›</span><a href="explorer.html">探索</a><span>›</span><a href="explorer.html?mak=${encodeURIComponent(w.maker)}">${UI.esc(w.maker)}</a><span>›</span><span>${UI.esc(w.title)}</span></div>
+    <header class="work-head">
+      <span class="eyebrow">${UI.esc(w.maker)}${w.series ? '　／　' + UI.esc(w.series) : ''}</span>
+      <h1>${UI.esc(w.title)}</h1>
+      <div class="cast">出演　${UI.esc(w.actresses.join('、') || '―')}</div>
+    </header>
+    <div class="stack">${UI.detail(w, { pageLink: false })}</div>`;
+})();
+</script>
+</body>
+</html>

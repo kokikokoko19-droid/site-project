@@ -1,57 +1,57 @@
-<title>探索カタログ モック</title>
+<title>AVめぐり モック</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-  /* 設計方針v1のトークンに合わせた暗い単一テーマ。配置は一列の縦積み */
-  :root { --bg0: #121316; --bg1: #1b1d22; --fg0: #f2f2f0; --fg1: #b9bcc3; --fg2: #7f838c; --accent: #d9a441; --accent-ink: #1a1407; --line: #30343c; color-scheme: dark; }
+  :root { --bg0: #141110; --bg1: #1c1816; --fg0: #efe7da; --fg1: #bdae9a; --fg2: #85775f; --accent: #d9a441; --accent-ink: #1a1407; --seal: #c9392b; --line: #342b25; --line-strong: #4a3d33; color-scheme: dark; }
   body { background: var(--bg0); color: var(--fg0); font: 15px/1.7 -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 24px 48px; }
   .wrap { max-width: 640px; margin: 0 auto; display: grid; gap: 24px; }
-  h1 { font-size: 22px; line-height: 1.3; margin: 0; text-wrap: balance; }
+  h1 { font-size: 24px; line-height: 1.3; margin: 0; text-wrap: balance; font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; }
   h2 { font-size: 16px; margin: 0; }
   p { margin: 0; }
   .muted { color: var(--fg1); font-size: 13px; }
-  .pr { border: 1px solid var(--line); background: var(--bg1); border-radius: 6px; padding: 10px 14px; font-size: 13px; color: var(--fg1); }
-  .pr b { color: var(--accent); margin-right: 8px; }
+  .pr { border: 1px solid var(--line); background: var(--bg1); border-radius: 4px; padding: 10px 14px; font-size: 13px; color: var(--fg1); }
+  .pr b { color: var(--accent); margin-right: 8px; letter-spacing: .2em; }
   .links { display: grid; gap: 12px; }
-  .links a { display: grid; gap: 4px; padding: 14px 16px; min-height: 44px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg1); color: var(--fg0); text-decoration: none; }
+  .links a { display: grid; gap: 4px; padding: 14px 16px; min-height: 44px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--bg1); color: var(--fg0); text-decoration: none; }
   .links a:hover, .links a:focus-visible { border-color: var(--accent); outline: none; }
   .links a b { font-size: 16px; }
   .links a span { color: var(--fg1); font-size: 13px; }
   .links a.main { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .links a.main span { color: var(--accent-ink); opacity: .8; }
+  .links.old a { padding: 10px 14px; }
+  .links.old a b { font-size: 14px; }
   ol { margin: 0; padding-left: 1.4em; display: grid; gap: 8px; color: var(--fg1); font-size: 14px; }
   ol b { color: var(--fg0); }
   .note { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--fg1); font-size: 13px; }
+  .seal { display: inline-block; width: 1.1em; height: 1.1em; vertical-align: -2px; margin-right: 6px; border: 2px solid var(--seal); border-radius: 50%; }
 </style>
 <div class="wrap">
   <div>
-    <h1>探索カタログ モック</h1>
-    <p class="muted">設計方針 v1 の画面モックです。データは合成（作品 0001〜0300、出演者A〜T、タグ01〜20）で、露骨な語は含みません。画像の代わりに色の枠を表示しています。</p>
+    <h1><span class="seal"></span>AVめぐり モック</h1>
+    <p class="muted">見た目の第2弾（v2「夜の名鑑」）です。データは合成（作品 0001〜0300、出演者A〜T、タグ01〜20）で露骨な語は含みません。表紙の代わりに色の枠を表示しています。本番では公式の表紙画像が入ります。</p>
   </div>
   <div class="pr"><b>PR</b>本番サイトではFANZAアフィリエイトのリンクを扱うため、このモックにも同じ位置にPR表記を置いています。</div>
   <div class="links">
-    <a class="main" href="explorer.html"><b>探索ページを開く</b><span>重みスライダー、タグ絞り込み、検索、ランダム、詳細モーダル</span></a>
-    <a href="top.html"><b>トップページ</b><span>運営者のひとこと、今日の発見、軸の入口、特集とガイド、新着、セール</span></a>
-    <a href="work.html?id=w0008"><b>作品ページの例</b><span>自動文、仕様、サンプル枠、CTA（PR）、軸への横移動、似た作品</span></a>
+    <a class="main" href="v2/top.html"><b>v2 トップページ</b><span>表紙型のヒーロー、運営者の手紙、理由つきの発見、索引、棚、値札</span></a>
+    <a href="v2/work.html?id=w0008"><b>v2 作品ページ</b><span>明朝の見出し、引用風の自動文、仕様表、価格とボタンの箱、似た作品の棚</span></a>
+    <a href="v2/explorer.html"><b>v2 探索ページ</b><span>第1弾と同じ操作で、見た目だけ v2</span></a>
   </div>
   <div>
-    <h2>見てほしいところ</h2>
+    <h2>v2 で変えたところ</h2>
     <ol>
-      <li><b>探索の操作感。</b>スマホで「並べ替えの重み」と「ジャンル」を開いて、重みを動かしたときに並びが変わる感じを確かめてください。</li>
-      <li><b>カードと詳細。</b>カードをタップすると詳細が開きます。自動文はデータだけから組み立てた文で、作品ごとに文型を変えています。</li>
-      <li><b>暗めの配色と余白。</b>この落ち着いた方向で進めてよいか。</li>
-      <li><b>運営者の文章が入る場所。</b>トップの「運営者から」と「特集とガイド」が、あなたが書く場所です。</li>
+      <li><b>文字。</b>見出しを明朝（Shippori Mincho B1）にし、数字も明朝で揃えました。本文はゴシックのままです。</li>
+      <li><b>印。</b>ロゴは朱の印（「巡」）。年齢確認とフッターにも同じ印を置きます。</li>
+      <li><b>強弱。</b>トップは1本を大きく見せる表紙型。作品は箱で囲まず、表紙と文字だけの軽いカードにしました。</li>
+      <li><b>棚と索引。</b>新着とセールは横にめくる棚、軸の入口は本の索引のような4列。セールには値札が付きます。</li>
+      <li><b>質感。</b>赤みのある黒と紙色の文字、うっすらした粒子、細い罫線で、テンプレート感を減らしました。</li>
     </ol>
   </div>
   <div>
-    <h2>決めてほしいこと（設計方針12章）</h2>
-    <ol>
-      <li>対象作品の範囲。直近36か月＋指定した出演者・シリーズ・メーカーの全作品、約1万件で始めてよいか。</li>
-      <li>デザインの方向性。参考にしたいサイトがあれば教えてください。</li>
-      <li>X投稿の本数と費用の上限。1日3〜5本、URLなしを基本にする案。</li>
-      <li>運営者情報の公開範囲。ハンドルネームと連絡先のみ、の案。</li>
-      <li>ホストの選定。mixhost か シン・レンタルサーバー。</li>
-      <li>外部LLMの差し込み口を今の段階で用意するか。</li>
-    </ol>
+    <h2>比較用: 第1弾（v1）</h2>
+    <div class="links old">
+      <a href="top.html"><b>v1 トップページ</b></a>
+      <a href="explorer.html"><b>v1 探索ページ</b></a>
+      <a href="work.html?id=w0008"><b>v1 作品ページ</b></a>
+    </div>
   </div>
   <p class="note">初回は年齢確認の画面が出ます。モックのため「18歳以上です」を押して進んでください。ページ間の移動は上のロゴとリンクで行い、戻るときはブラウザの「戻る」を使ってください。</p>
 </div>

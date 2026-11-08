@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="common.css">
+<title>AVめぐり（モック v2）</title>
+</head>
+<body>
+<main class="wrap" id="main"></main>
+<script src="../data.js"></script>
+<script src="ui.js"></script>
+<script>
+(function () {
+  const M = window.MOCK, UI = window.UI;
+  UI.shell('top');
+  const byDate = [...M.works].sort((a, b) => b.releasedAt - a.releasedAt);
+  const rated = M.works.filter(w => w.reviewCount >= 20).sort((a, b) => b.reviewAvg - a.reviewAvg);
+  const featured = rated.find(w => w.hasSample && w.actresses.length) || rated[0];
+  const finds = rated.filter(w => w !== featured && (w.labels.includes('高評価') || w.labels.includes('定番'))).slice(0, 3);
+  const sale = M.works.filter(w => w.onSale).sort((a, b) => b.reviewAvg - a.reviewAvg).slice(0, 10);
+  // 索引: 各軸の上位5件（作品数の多い順）
+  const count = (pick) => { const c = new Map(); M.works.forEach(w => pick(w).forEach(k => { if (k) c.set(k, (c.get(k) || 0) + 1); })); return [...c].sort((a, b) => b[1] - a[1]); };
+  const axes = [
+    ['出演者', '人', 'act', count(w => w.actresses)],
+    ['シリーズ', '件', 'ser', count(w => [w.series])],
+    ['メーカー', '社', 'mak', count(w => [w.maker])],
+    ['ジャンル', '種', 'g', count(w => w.genres)],
+  ];
+  const index = axes.map(([name, unit, key, list]) => `<div><h3>${name}<b>${list.length}${unit}</b></h3><ol>${list.slice(0, 5).map(([n, c]) => `<li><a href="explorer.html?${key}=${encodeURIComponent(n)}">${UI.esc(n)}<span>${c}作品</span></a></li>`).join('')}</ol><a class="more" href="explorer.html">${name}をすべて見る →</a></div>`).join('');
+  document.getElementById('main').innerHTML = `
+    <section class="cover-hero">
+      ${UI.thumb(featured)}
+      <div class="text">
+        <span class="eyebrow">${UI.mark('mark')} 今週の1本　運営者が選ぶ</span>
+        <h1>${UI.esc(featured.title)}</h1>
+        <p class="lead">（ここは運営者の一言が入る場所です。なぜ今週この1本なのか、2〜3行で。自動文ではなく人の言葉を最初に置きます。）</p>
+        <div class="hero-meta">
+          <span>出演 <b>${UI.esc(featured.actresses.join('、') || featured.maker)}</b></span>
+          <span>メーカー <b>${UI.esc(featured.maker)}</b></span>
+          <span>収録 <b class="num">${featured.volumeMin}分</b></span>
+          <span>評価 <b class="num">★ ${featured.reviewAvg.toFixed(1)}</b> <span class="dim">${featured.reviewCount}件</span></span>
+        </div>
+        <div class="actions"><a class="btn btn-cta" href="work.html?id=${featured.id}">作品ページを見る</a><a class="btn" href="explorer.html?lab=高評価">高評価の作品を探す</a></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="letter">
+        <div>
+          <div class="from">運営者から</div>
+          <p>（ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。自動生成ではなく人の声が最初に目に入るようにします。）</p>
+          <div class="date">${M.fmtDate(M.NOW)}　AVめぐり 編集</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>今日の発見</h2><span class="sub">評価と定番から毎日3本</span><a class="more" href="explorer.html?lab=高評価">もっと見る →</a></div>
+      <div class="finds">${finds.map(UI.find).join('')}</div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>索引</h2><span class="sub">出演者・シリーズ・メーカー・ジャンルから</span></div>
+      <div class="index">${index}</div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>特集とガイド</h2><span class="sub">運営者が選び、運営者が書く</span></div>
+      <div class="hub2">
+        <div class="features">
+          <a class="feature" href="#"><div class="pic">特集の写真（公式画像）</div><span class="eyebrow">特集</span><h3>（特集タイトル 1）</h3><p>運営者が選んだ作品群と、その理由を書く場所です。</p></a>
+          <a class="feature" href="#"><div class="pic">特集の写真（公式画像）</div><span class="eyebrow">特集</span><h3>（特集タイトル 2）</h3><p>季節やセールに合わせて入れ替えます。</p></a>
+        </div>
+        <div>
+          <span class="eyebrow">ガイド</span>
+          <div class="guides" style="margin-top:8px">
+            <a href="#"><span><b>このサイトの使い方</b><br><span>探索ページの重みと絞り込みの考え方</span></span><i>→</i></a>
+            <a href="#"><span><b>はじめての1本の選び方</b><br><span>「初見向け」ラベルの意味と選び方</span></span><i>→</i></a>
+            <a href="#"><span><b>軸の解説</b><br><span>シリーズ追い、出演者追い、メーカーの作風</span></span><i>→</i></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>新着</h2><span class="sub">直近の配信開始</span><a class="more" href="explorer.html?sort=new">もっと見る →</a></div>
+      ${UI.shelf(byDate.slice(0, 10), { sub: w => M.fmtDate(w.releasedAt) + ' 配信' })}
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>セール中</h2><span class="sub">期間限定</span><a class="more" href="explorer.html?sale=1">もっと見る →</a></div>
+      ${UI.shelf(sale, { tag: true })}
+    </section>
+    <div class="ad-slot">広告スロット（空）</div>`;
+})();
+</script>
+</body>
+</html>
