@@ -89,6 +89,8 @@ const updated = formatUpdated(dataUpdatedAt);
 // 未設定（合成データ・開発時）や、G- で始まる形式でない値のときは何も出さない。
 // 広告向けの機能は使わない（docs/02_設計方針.md の10章）。イベントの送信は public/analytics/events.js が行う。
 const rawGa4Id = import.meta.env.PUBLIC_GA4_ID;
+// 仮公開のあいだ検索に載せない切替（docs/11 段階1）。本公開のときに外す
+const siteNoindex = import.meta.env.PUBLIC_NOINDEX === '1';
 const ga4Id = typeof rawGa4Id === 'string' && /^G-[A-Za-z0-9]{4,20}$/.test(rawGa4Id.trim()) ? rawGa4Id.trim() : undefined;
 const ga4Snippet = ga4Id
   ? `window.dataLayer = window.dataLayer || [];
@@ -110,8 +112,9 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
     <link rel="canonical" href={canonicalUrl} />
     {/* 成人向けサイトであることを検索エンジンなどに伝える */}
     <meta name="rating" content="adult" />
-    {/* 既定は index。中継ページなど載せたくないページだけ noindex を指定する */}
-    {noindex && <meta name="robots" content="noindex, nofollow" />}
+    {/* 既定は index。中継ページなど載せたくないページだけ noindex を指定する。
+        仮公開（公開前の国内確認）の間は PUBLIC_NOINDEX=1 で全ページを noindex にする */}
+    {(noindex || siteNoindex) && <meta name="robots" content="noindex, nofollow" />}
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content={ogType} />
