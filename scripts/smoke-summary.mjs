@@ -20,7 +20,8 @@ const actresses = read('actresses.json') ?? [];
 const count = (pred) => works.filter(pred).length;
 const pct = (n) => (works.length === 0 ? '-' : `${Math.round((n / works.length) * 100)}%`);
 const row = (label, n) => `| ${label} | ${n} | ${pct(n)} |`;
-const isDmmHttps = (u) => typeof u === 'string' && /^https:\/\/([a-z0-9-]+\.)*dmm\.(co\.jp|com)\//.test(u);
+// アフィリエイト URL は al.fanza.co.jp（または al.dmm.co.jp）で返るので、fanza.co.jp も許す
+const isDmmHttps = (u) => typeof u === 'string' && /^https:\/\/([a-z0-9-]+\.)*(dmm\.(co\.jp|com)|fanza\.co\.jp)\//.test(u);
 const sampleMovieUrls = (w) => Object.values(w.sampleMovie?.sizes ?? {});
 
 const lines = [];
@@ -84,7 +85,7 @@ for (const w of works) {
   for (const u of sampleMovieUrls(w)) if (!isDmmHttps(u)) badUrl.push(`${w.contentId}:sampleMovie`);
   for (const u of w.sampleImages ?? []) if (!isDmmHttps(u)) badUrl.push(`${w.contentId}:sampleImage`);
 }
-lines.push('', '### URL の形（https かつ dmm.co.jp / dmm.com）', '');
+lines.push('', '### URL の形（https かつ dmm.co.jp / dmm.com / fanza.co.jp）', '');
 lines.push(badUrl.length === 0 ? '- 全て問題なし' : `- 外れたもの ${badUrl.length} 件: ${badUrl.slice(0, 20).join(', ')}${badUrl.length > 20 ? ' …' : ''}`);
 
 // ランキング・今日の候補

@@ -58,6 +58,8 @@ const guidePlaceholders = [
   dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
 >
   <section class="section">
+    {/* ページの見出し（h1）。ロゴはリンクなので、検索向けに説明文を h1 にする */}
+    <h1 class="site-lead">AV女優とおすすめ作品を見て回るカタログ</h1>
     <div class="editorial">
       <div class="who">運営者から</div>
       <!-- TODO: 運営者が記入（今週見たもの、気づいたこと、サイトの使い方を数行で） -->
@@ -141,3 +143,8 @@ const guidePlaceholders = [
 
   <AdSlot name="top-bottom" />
 </Base>
+
+<style>
+  /* h1 だがロゴを主役にするため控えめに。本文の導入文と同じ大きさ */
+  .site-lead { margin: 0 0 12px; font-size: 15px; font-weight: 500; color: var(--muted); letter-spacing: 0.02em; }
+</style>

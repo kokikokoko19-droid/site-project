@@ -1,12 +1,16 @@
 ---
-// セール中の作品の全件（「セール中」の派生ラベルが付いたもの）。配信開始日の新しい順。
+// セール中の作品（「セール中」の派生ラベルが付いたもの）。配信開始日の新しい順。
+// 実データではセール対象が常時 1 割前後あり（2026-11-08 の確認で 582 件中 48 件）、全件を 1 ページに並べると数百件になるため、
+// ここは MAX 件までにして、残りは探索ページ（セール中の絞り込み付き）へ送る。
 import Base from '../layouts/Base.astro';
 import AdSlot from '../components/AdSlot.astro';
 import WorkGrid from '../components/WorkGrid.astro';
 import { loadCatalog } from '../lib/catalog.ts';
 
+const MAX = 120;
 const catalog = loadCatalog();
-const works = catalog.onSale();
+const total = catalog.onSale().length;
+const works = catalog.onSale(MAX);
 ---
 
 <Base
@@ -18,13 +22,16 @@ const works = catalog.onSale();
     <h1>セール中</h1>
     {
       works.length > 0 && (
-        <p class="muted">セール対象の作品 {works.length}件（配信開始日の新しい順）。価格とセール期間はデータ更新時点の情報です。最新の内容は販売ページで確認してください。</p>
+        <p class="muted">セール対象の作品 {total}件（配信開始日の新しい順{total > works.length ? `、ここでは新しい${works.length}件` : ''}）。価格とセール期間はデータ更新時点の情報です。最新の内容は販売ページで確認してください。</p>
       )
     }
   </section>
 
   <section class="section">
     <WorkGrid works={works} empty="現在セール中の作品はありません。" />
+    {total > works.length && (
+      <p style="margin-top: 16px"><a class="btn" href="/explore/?sale=1">探索ページでセール中の全件を見る（{total}件）</a></p>
+    )}
   </section>
 
   <AdSlot name="sale-bottom" />

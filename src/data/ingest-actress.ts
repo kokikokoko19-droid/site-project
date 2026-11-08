@@ -12,8 +12,13 @@ import type { ActressProfile } from './types.ts';
 
 export type ActressIngestOptions = {
   ids?: string[]; hits?: number; onProgress?: (info: IngestProgress) => void; now?: () => Date;
+  /** true なら、プロフィールを保存済みの出演者は問い合わせない（日次の差分取り込み用） */
+  onlyMissing?: boolean;
+  /** 1回に問い合わせる人数の上限。超えた分は次回に回す（null か省略なら無制限） */
+  max?: number | null;
 };
-export type ActressIngestResult = { requested: number; upserted: number; missing: number };
+/** requested は問い合わせた人数、skipped は保存済みで飛ばした人数、deferred は上限で次回に回した人数 */
+export type ActressIngestResult = { requested: number; upserted: number; missing: number; skipped: number; deferred: number };
 
 /** 空文字・空白のみ・null・undefined は null、それ以外は文字列にして前後の空白を除く */
 function toText(v: unknown): string | null {
@@ -65,12 +70,25 @@ function save(db: Db, profiles: ActressProfile[], now: Date): number {
   return upserted;
 }
 
-/** ids 省略時は works の出演者全員。1件ずつ問い合わせ、該当 id の行だけ保存する */
+/** 問い合わせる id を決める（保存済みを飛ばし、上限で切る）。順序は入力どおり */
+export function planActressIds(db: Db, all: string[], opts: Pick<ActressIngestOptions, 'onlyMissing' | 'max'>): { ids: string[]; skipped: number; deferred: number } {
+  const have = opts.onlyMissing ? new Set(db.listActressProfiles().map((p) => p.id)) : new Set<string>();
+  const wanted = all.filter((id) => !have.has(id));
+  const ids = typeof opts.max === 'number' ? wanted.slice(0, opts.max) : wanted;
+  return { ids, skipped: all.length - wanted.length, deferred: wanted.length - ids.length };
+}
+
+/** ids 省略時は works の出演者全員。1件ずつ問い合わせ、該当 id の行だけ保存する。
+ *  onlyMissing なら保存済みの出演者は飛ばし、max があればその人数で切って残りは次回に回す（API の呼び出しは 1 人 1 回なので、日次の時間を抑えるため） */
 export async function ingestActressProfiles(
   client: IngestClient, db: Db, opts: ActressIngestOptions = {},
 ): Promise<ActressIngestResult> {
   const now = (opts.now ?? (() => new Date()))();
-  const ids = [...new Set(opts.ids ?? actressIdsInWorks(db))];
+  const all = [...new Set(opts.ids ?? actressIdsInWorks(db))];
+  const { ids, skipped, deferred } = planActressIds(db, all, opts);
+  if (skipped > 0 || deferred > 0) {
+    opts.onProgress?.({ kind: 'page', message: `出演者 ${all.length} 人のうち、保存済み ${skipped} 人を飛ばして ${ids.length} 人を問い合わせます（次回に回す ${deferred} 人）` });
+  }
   const profiles: ActressProfile[] = [];
   let missing = 0;
   for (const [i, id] of ids.entries()) {
@@ -80,8 +98,8 @@ export async function ingestActressProfiles(
     if ((i + 1) % 50 === 0) opts.onProgress?.({ kind: 'page', message: `出演者 ${i + 1}/${ids.length} 件を処理しました` });
   }
   const upserted = save(db, profiles, now);
-  opts.onProgress?.({ kind: 'done', message: `出演者プロフィール ${upserted} 件を保存しました（該当なし ${missing} 件）` });
-  return { requested: ids.length, upserted, missing };
+  opts.onProgress?.({ kind: 'done', message: `出演者プロフィール ${upserted} 件を保存しました（該当なし ${missing} 件、保存済みで飛ばした ${skipped} 件、次回に回した ${deferred} 件）` });
+  return { requested: ids.length, upserted, missing, skipped, deferred };
 }
 
 /** API を使わず syntheticActressList で works の出演者全員分（または ids）を合成して保存する（開発・テスト用） */
@@ -94,5 +112,5 @@ export async function ingestSyntheticActressProfiles(
   const profiles = rows.map((x) => normalizeActress(x, now.toISOString())).filter((p): p is ActressProfile => p !== null);
   const upserted = save(db, profiles, now);
   opts.onProgress?.({ kind: 'done', message: `合成の出演者プロフィール ${upserted} 件を保存しました` });
-  return { requested: ids.length, upserted, missing: ids.length - upserted };
+  return { requested: ids.length, upserted, missing: ids.length - upserted, skipped: 0, deferred: 0 };
 }

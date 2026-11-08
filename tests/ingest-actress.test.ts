@@ -73,8 +73,31 @@ test('ids 指定時はその分だけ問い合わせ、応答に該当 id が無
   const fetchImpl = (async () => new Response(JSON.stringify(syntheticActressList({ ids: ['999'] })))) as typeof fetch;
   const client = createClient({ ...CLIENT_OPTS, fetchImpl });
   const res = await ingestActressProfiles(client, db, { ids: ['999', '888'], now: NOW });
-  assert.deepEqual(res, { requested: 2, upserted: 1, missing: 1 });
+  assert.deepEqual(res, { requested: 2, upserted: 1, missing: 1, skipped: 0, deferred: 0 });
   assert.deepEqual(db.listActressProfiles().map((a) => a.id), ['999']);
+  db.close();
+});
+
+test('onlyMissing と max: 保存済みの出演者は問い合わせず、上限を超えた分は次回に回す', async () => {
+  const db = dbWithWorks(60);
+  const all = actressIdsInWorks(db);
+  assert.ok(all.length >= 8, `出演者が少なすぎます: ${all.length}`);
+  // 先に 2 人分を入れておく
+  await ingestActressProfiles(setup().client, db, { ids: all.slice(0, 2), now: NOW });
+  const { client, urls } = setup();
+  const res = await ingestActressProfiles(client, db, { onlyMissing: true, max: 3, now: NOW });
+  assert.deepEqual(res, { requested: 3, upserted: 3, missing: 0, skipped: 2, deferred: all.length - 5 });
+  assert.deepEqual(urls.map((u) => u.searchParams.get('actress_id')), all.slice(2, 5));
+  assert.equal(db.listActressProfiles().length, 5);
+  // 2 回目は続きから。上限なしなら残り全員
+  const second = setup();
+  const res2 = await ingestActressProfiles(second.client, db, { onlyMissing: true, now: NOW });
+  assert.deepEqual([res2.requested, res2.skipped, res2.deferred], [all.length - 5, 5, 0]);
+  assert.deepEqual(db.listActressProfiles().map((a) => a.id).sort(), all);
+  // onlyMissing なしなら保存済みでも全員問い合わせる（取り直し）
+  const third = setup();
+  const res3 = await ingestActressProfiles(third.client, db, { now: NOW });
+  assert.deepEqual([res3.requested, res3.skipped, res3.deferred, third.urls.length], [all.length, 0, 0, all.length]);
   db.close();
 });
 
