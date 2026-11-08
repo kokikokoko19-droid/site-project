@@ -1,5 +1,5 @@
 // 探索ページの見た目（カードとモーダルのHTML）。文字は必ず esc() を通す。
-// カードは src/components/WorkCard.astro と同じクラス構成にしてある（見た目を変えるときは両方を直す）。
+// カードは src/components/WorkCard.astro（variant="grid"）と同じクラス構成にしてある（見た目を変えるときは両方を直す）。
 
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const HOT = new Set(['高評価', 'セール中', '初見向け']); // 目立たせるラベル（WorkCard.astro と同じ）
@@ -11,32 +11,12 @@ function fmtDate(d) {
   return m ? `${Number(m[1])}年${Number(m[2])}月${Number(m[3])}日` : '―';
 }
 
-/** カードの1文。例「120分・4.2点・1,980円」。欠けた項目は省く */
-export function cardLine(w) {
-  const parts = [];
-  if (w.v != null) parts.push(`${w.v}分`);
-  if (w.ra != null && w.rc > 0) parts.push(`${w.ra.toFixed(1)}点`);
-  if (w.p != null) parts.push(yen(w.p));
-  return parts.join('・');
-}
-
-// 画像が無いときの色の枠。IDから色相を決める（WorkCard.astro と同じ計算）
-const hash = (s) => {
-  let h = 0;
-  for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return h;
-};
-function frame(id) {
-  const hue = hash(id) % 360;
-  return `background: linear-gradient(145deg, hsl(${hue} 28% 30%), hsl(${(hue + 40) % 360} 24% 16%));`;
-}
-
-/** 画像は公式配信の直リンクをそのまま表示する（加工は拡大縮小のみ）。http(s) 以外のURLは使わない */
+/** 画像は公式配信の直リンクをそのまま表示する（加工は拡大縮小のみ）。http(s) 以外のURLは使わない。無いときは無地の枠 */
 function thumbHtml(w) {
   const src = typeof w.img === 'string' && /^https?:\/\//.test(w.img) ? w.img : '';
   return src
-    ? `<div class="thumb has-img"><img src="${esc(src)}" alt="" loading="lazy" decoding="async"></div>`
-    : `<div class="thumb" style="${frame(w.id)}"></div>`;
+    ? `<div class="thumb"><img src="${esc(src)}" alt="" loading="lazy" decoding="async"></div>`
+    : `<div class="thumb"></div>`;
 }
 
 function labelsHtml(labels, max) {
@@ -48,14 +28,14 @@ function labelsHtml(labels, max) {
 /** 結果グリッドの1枚。リンクは作品ページ。通常のクリックは explorer-ui.js がモーダルに切り替える */
 export function cardHtml(w) {
   const meta = w.a.length ? w.a.join('、') : w.m;
-  const line = cardLine(w);
+  const rate = w.ra != null && w.rc > 0 ? `<div class="rate">★ ${w.ra.toFixed(1)} <span class="dim">${w.rc}件</span></div>` : '';
   return `<a class="card" href="/v/${encodeURIComponent(w.id)}/" data-id="${esc(w.id)}">
     ${thumbHtml(w)}
     <div class="card-body">
       <div class="card-title">${esc(w.t)}</div>
       ${meta ? `<div class="card-meta">${esc(meta)}</div>` : ''}
-      ${line ? `<div class="card-line">${esc(line)}</div>` : ''}
-      ${labelsHtml(w.lb, 3)}
+      ${rate}
+      ${labelsHtml(w.lb, 2)}
     </div></a>`;
 }
 

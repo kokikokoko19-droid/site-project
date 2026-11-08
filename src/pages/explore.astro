@@ -1,6 +1,6 @@
 ---
 // 探索ページ（/explore/）。重み付けの並べ替え・絞り込み・検索・ランダムは、ブラウザ側の JS（public/explorer/）が行う。
-// マークアップは mocks/explorer.html に合わせている。ジャンル・ラベル・年の選択肢はビルド時に index.json から埋める。
+// マークアップは mocks/v2/explorer.html に合わせている。ジャンル・ラベル・年の選択肢はビルド時に index.json から埋める。
 // 出演者・シリーズ・メーカーは数が多いので埋め込まず、ブラウザ側の検索式部品（axis-picker.js）が作品データから候補を作る。
 // 作品データ（/data/*.json）は scripts/copy-export.mjs が data/export から public/data にコピーする（npm run build の前に自動実行）。
 import { readFileSync } from 'node:fs';
@@ -52,7 +52,7 @@ const lens = [['short', '短め'], ['mid', '標準'], ['long', '長め']];
   dataUpdatedAt={index.generatedAt}
 >
   <div class="crumb"><a href="/">トップ</a> › 探索</div>
-  <div class="section-head"><h1>探索</h1><span class="muted">並べ替えの重みと絞り込みはURLに残ります</span></div>
+  <div class="section-head"><h1>探索</h1><span class="sub">並べ替えの重みと絞り込みはURLに残ります</span></div>
   <div class="explore">
     <aside class="panel" id="panel" aria-label="並べ替えと絞り込み">
       <details open>
