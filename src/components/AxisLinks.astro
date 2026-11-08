@@ -1,7 +1,7 @@
 ---
 // 作品から各軸のページ（出演者・シリーズ・メーカー・ジャンル）へ回遊するためのリンク集。
 // URL は docs/02_設計方針.md の 2.1 に合わせる: /actress/{id}/ /series/{id}/ /maker/{id}/ /genre/{id}/
-// 見た目は mocks/ui.js の detail() の .axis-links と同じ（common.css）。
+// 見た目は mocks/v2/ui.js の detail() の .axis-links と同じ（common.css）。出演者・シリーズ・メーカーは種別の小さな見出し（.k）を添える。
 import type { NamedRef } from '../data/types.ts';
 
 interface Props {
@@ -14,20 +14,20 @@ interface Props {
 const { actresses = [], series = [], makers = [], genres = [] } = Astro.props;
 
 /** 軸の並び順は、出演者 → シリーズ → メーカー → ジャンル（モックと同じ）。id か名前が空の参照と、同じ軸内の重複は除く */
-const AXES: [string, NamedRef[]][] = [
-  ['actress', actresses],
-  ['series', series],
-  ['maker', makers],
-  ['genre', genres],
+const AXES: [string, string, NamedRef[]][] = [
+  ['actress', '出演', actresses],
+  ['series', 'シリーズ', series],
+  ['maker', 'メーカー', makers],
+  ['genre', '', genres],
 ];
-const links = AXES.flatMap(([axis, refs]) => {
+const links = AXES.flatMap(([axis, kind, refs]) => {
   const seen = new Set<string>();
-  const out: { href: string; name: string }[] = [];
+  const out: { href: string; name: string; kind: string }[] = [];
   for (const r of refs) {
     const name = (r.name ?? '').trim();
     if (!r.id || name === '' || seen.has(r.id)) continue;
     seen.add(r.id);
-    out.push({ href: `/${axis}/${encodeURIComponent(r.id)}/`, name });
+    out.push({ href: `/${axis}/${encodeURIComponent(r.id)}/`, name, kind });
   }
   return out;
 });
@@ -36,7 +36,7 @@ const links = AXES.flatMap(([axis, refs]) => {
 {
   links.length > 0 && (
     <div class="axis-links" role="group" aria-label="この作品の出演者・シリーズ・メーカー・ジャンル">
-      {links.map((l) => <a href={l.href}>{l.name}</a>)}
+      {links.map((l) => <a href={l.href}>{l.kind && <span class="k">{l.kind}</span>}{l.name}</a>)}
     </div>
   )
 }

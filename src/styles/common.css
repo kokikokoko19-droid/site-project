@@ -211,7 +211,9 @@ p { margin: 0; }
 @media (min-width: 640px) { .gallery { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .gallery div { aspect-ratio: 4 / 3; max-width: 100%; background: var(--bg2); box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); border-radius: 2px; display: flex; align-items: center; justify-content: center; color: var(--fg2); font-size: 11px; }
 .video { position: relative; aspect-ratio: 16 / 9; max-width: 100%; background: #0d0b0a; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); border-radius: 3px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: var(--fg1); font-size: var(--fs-s); }
-.video .play { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--accent); display: grid; place-items: center; color: var(--accent); font-size: 22px; padding-left: 4px; }
+.video .play { width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--accent); background: transparent; display: grid; place-items: center; color: var(--accent); font: inherit; font-size: 22px; padding: 0 0 0 4px; cursor: pointer; }
+.video .play:hover { background: var(--accent-soft); }
+.video { text-align: center; }
 .work-head { display: grid; gap: 6px; margin-bottom: calc(var(--sp) * 3); }
 .work-head h1 { font-size: clamp(22px, 3.2vw, 30px); }
 .work-head .cast { color: var(--fg1); font-size: 14px; }

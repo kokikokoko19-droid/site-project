@@ -3,16 +3,18 @@
 // API の sampleMovieURL（sizes）をそのまま iframe で使う。手組みのURLは使わない。
 // 初期HTMLには iframe を出さない。最初は枠とボタンだけを出し、押されたときに iframe を差し込む
 // （公式プレーヤーの読み込みを再生時まで遅らせ、初期表示を軽く保つため）。
-// 動画が無い作品（sampleMovie が null）では何も出さない。
+// 動画が無い作品（sampleMovie が null）では何も出さない。見た目は v2 の丸い再生ボタン。
 import type { SampleMovie } from '../data/types.ts';
 
 interface Props {
   movie?: SampleMovie | null;
   /** iframe の title（読み上げ用）に使う作品名 */
   title?: string;
+  /** 動画があるときだけ、枠の上に出す見出し（作品ページ用）。省略すると出さない */
+  heading?: string;
 }
 
-const { movie = null, title = '' } = Astro.props;
+const { movie = null, title = '', heading = '' } = Astro.props;
 
 /** 使うサイズの優先順。大きいものから（先に見つかったものを採る） */
 const SIZE_KEYS = ['size_720_480', 'size_644_414', 'size_560_360', 'size_476_306'] as const;
@@ -50,9 +52,13 @@ const PLAYER_SCRIPT = `(function () {
 
 {
   src && (
-    <div class="video" data-sample-movie data-src={src} data-title={frameTitle}>
-      <button class="btn" type="button" data-sample-play>サンプル動画を再生</button>
-      <span class="muted">再生すると、公式の動画プレーヤー（DMM.com）を読み込みます。</span>
+    <div>
+      {heading && <div class="section-head"><h2>{heading}</h2></div>}
+      <div class="video" data-sample-movie data-src={src} data-title={frameTitle}>
+        {/* 丸い再生ボタン。押すと公式プレーヤーの iframe を差し込む（スクリプトは data-sample-play を見る） */}
+        <button class="play" type="button" data-sample-play aria-label="サンプル動画を再生"><span aria-hidden="true">▶</span></button>
+        <div>サンプル動画を再生<span class="dim">　公式プレーヤー（DMM.com）を読み込みます</span></div>
+      </div>
     </div>
   )
 }
