@@ -2,8 +2,10 @@
 # daily.yml にも手動実行（workflow_dispatch）はあるが、GitHub の仕様で既定ブランチ（main）にあるワークフローしか手動実行できない。
 # main にマージする前に実データで確かめるために、このワークフローを置く。
 # 動く条件: コミットメッセージに [smoke] を含む push（main 以外）。push のたびに API を呼ばないための印。main にマージしたあとは手動実行もできる。
-# daily の DB cache（catalog-db-v1-*）には触れない。dist は artifact `dist-smoke` に 3 日残す。配信はしない。
-# 手順は docs/07_運用手順.md の 3.8 節。
+# コミットメッセージで範囲と配信を指定できる: 例 "[smoke days=30 ranked=5 deploy]"（days は直近の日数、ranked は人気順のページ数、deploy があれば配信）。
+# DB は smoke 専用の cache（catalog-db-smoke-*）に残し、daily の cache（catalog-db-v1-*）には触れない。dist は artifact `dist-smoke` に 3 日残す。
+# ビルドは常に PUBLIC_NOINDEX=1（仮公開用。検索に載せない）。本公開は main の daily.yml で行う。
+# 配信（deploy ジョブ）は "deploy" の指定があり、配信用の secrets が揃っているときだけ。手順は docs/07_運用手順.md の 3.8 節と 5.4 節。
 name: Smoke
 
 on:
@@ -37,11 +39,33 @@ env:
 
 jobs:
   smoke:
-    # push はコミットメッセージに [smoke] があるときだけ。手動実行は常に動く。
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[smoke]')
+    # push はコミットメッセージに [smoke が含まれるときだけ（"[smoke]" と "[smoke days=30 ...]" の両方）。手動実行は常に動く。
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[smoke')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    outputs:
+      deploy: ${{ steps.params.outputs.deploy }}
     steps:
+      # コミットメッセージの "[smoke days=N ranked=M deploy]" を読む。手動実行では入力を使う。
+      - name: 範囲と配信の指定を読む
+        id: params
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+          IN_DAYS: ${{ inputs.recent_days }}
+          IN_RANKED: ${{ inputs.ranked_pages }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          tag=$(printf '%s' "$MSG" | grep -oE '\[smoke[^]]*\]' | head -1 || true)
+          days=$(printf '%s' "$tag" | grep -oE 'days=[0-9]+' | cut -d= -f2 || true)
+          ranked=$(printf '%s' "$tag" | grep -oE 'ranked=[0-9]+' | cut -d= -f2 || true)
+          deploy=false
+          if [ "$EVENT" = "workflow_dispatch" ]; then days="${IN_DAYS:-3}"; ranked="${IN_RANKED:-1}"; fi
+          if printf '%s' "$tag" | grep -qE '(^|[ ,])deploy([ ,\]]|$)'; then deploy=true; fi
+          echo "days=${days:-3}" >> "$GITHUB_OUTPUT"
+          echo "ranked=${ranked:-1}" >> "$GITHUB_OUTPUT"
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+          echo "直近 ${days:-3} 日、人気順 ${ranked:-1} ページ、配信: $deploy" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: チェックアウト
         uses: actions/checkout@v4
         with:
@@ -70,14 +94,26 @@ jobs:
           echo "FANZA_API_ID と FANZA_AFFILIATE_ID が両方あります。実データで確認します。"
           echo "データの取得元: 実データ（FANZA API）。確認用の小さな取り込み" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: 実データを取り込む（小さく）
+      # smoke 専用の DB cache。前回の続きから取り込む（出演者プロフィールの差分取り込みのため）。daily の cache は使わない
+      - name: DB を smoke 用 cache から復元
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: data/catalog.sqlite
+          key: catalog-db-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            catalog-db-smoke-
+
+      - name: 実データを取り込む
         env:
           FANZA_API_ID: ${{ secrets.FANZA_API_ID }}
           FANZA_AFFILIATE_ID: ${{ secrets.FANZA_AFFILIATE_ID }}
-          # 手動実行のときだけ入力で変えられる。push のときは 3 と 1。
-          RECENT_DAYS: ${{ inputs.recent_days || '3' }}
-          RANKED_PAGES: ${{ inputs.ranked_pages || '1' }}
-        run: npm run ingest -- --recent-days "$RECENT_DAYS" --ranked-pages "$RANKED_PAGES" --actress-profiles
+          RECENT_DAYS: ${{ steps.params.outputs.days }}
+          RANKED_PAGES: ${{ steps.params.outputs.ranked }}
+          RESTORED_KEY: ${{ steps.restore.outputs.cache-matched-key }}
+        run: |
+          if [ -n "$RESTORED_KEY" ]; then echo "復元した DB の cache: $RESTORED_KEY"; else echo "cache なし。空の DB から始めます"; fi
+          npm run ingest -- --recent-days "$RECENT_DAYS" --ranked-pages "$RANKED_PAGES" --actress-profiles
 
       - name: 派生データを計算する
         run: npm run derive
@@ -85,9 +121,17 @@ jobs:
       - name: 探索用 JSON を書き出す
         run: npm run export
 
-      - name: サイトをビルドする
+      - name: サイトをビルドする（仮公開用に noindex）
         # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする
+        env:
+          PUBLIC_NOINDEX: '1'
         run: npm run build
+
+      - name: DB を smoke 用 cache に保存
+        uses: actions/cache/save@v4
+        with:
+          path: data/catalog.sqlite
+          key: catalog-db-smoke-${{ github.run_id }}-${{ github.run_attempt }}
 
       # 件数と ID だけの要約。タイトルなどの文字列はログに残さない。
       - name: 取り込み結果の要約
@@ -102,3 +146,69 @@ jobs:
           if-no-files-found: error
           # .htaccess や .well-known など、ドットで始まるファイルも含める
           include-hidden-files: true
+
+  # 仮公開の配信。"[smoke ... deploy]" のときだけ。中身は daily.yml の deploy ジョブと同じ（artifact 名だけ dist-smoke）。
+  deploy:
+    needs: smoke
+    if: ${{ needs.smoke.outputs.deploy == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: 配信用 secrets の有無を確認
+        id: gate
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ] && [ -n "$DEPLOY_PATH" ] && [ -n "$DEPLOY_SSH_KEY" ]; then
+            echo "has_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "配信: 実施する（仮公開、noindex）" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "has_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "配信: 見送り（DEPLOY_HOST・DEPLOY_USER・DEPLOY_PATH・DEPLOY_SSH_KEY のいずれかが未登録）" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=配信できない::配信用の secrets が揃っていません（docs/07 5.3 節）。"
+            exit 1
+          fi
+
+      - name: チェックアウト（scripts/deploy.sh のため）
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: dist をダウンロード
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-smoke
+          path: dist
+
+      - name: SSH 鍵と known_hosts を用意
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: ホストへ配信
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_CHECK_URL: ${{ secrets.DEPLOY_CHECK_URL }}
+        run: |
+          export DEPLOY_KEY_FILE="$HOME/.ssh/deploy_key"
+          scripts/deploy.sh
+
+      - name: SSH 鍵を削除
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
