@@ -1,6 +1,7 @@
 ---
 // 棚（横にめくる表紙の並び）。見た目は mocks/v2 の .shelf。新着・セール中・似た作品で使う。
-// セールのときは tag を付けると、表紙の角に値札（セール価格と、取り消し線の定価）が出る。
+// セールのときは tag を付けると、表紙の下に値札（セール価格と、取り消し線の定価）が出る（表紙には重ねない）。
+// 棚の末尾に「すべて見る」などの終端カードを足すときは slot="end" に入れる（.shelf-end の a 要素）。
 // 文言は自動文だけで、公式の紹介文やレビュー本文は使わない。
 import type { CatalogWork } from '../lib/catalog.ts';
 import { toCard } from '../lib/card.ts';
@@ -17,9 +18,11 @@ interface Props {
   empty?: string;
   /** 棚の読み上げ名 */
   label?: string;
+  /** 先頭の何枚を遅延読み込みしないか（画面の最初に見える棚だけ指定する。既定 0） */
+  eager?: number;
 }
 
-const { works, tag = false, sub = 'who', empty = '該当する作品がありません。', label = '作品の棚' } = Astro.props;
+const { works, tag = false, sub = 'who', empty = '該当する作品がありません。', label = '作品の棚', eager = 0 } = Astro.props;
 
 const cards = works.map((w) => {
   const date = fmtDate(w.releasedAt);
@@ -32,9 +35,10 @@ const cards = works.map((w) => {
     <div class="shelf-wrap">
       {/* 横にスクロールできる領域は、キーボードでも動かせるよう tabindex を付ける */}
       <div class="shelf" role="region" aria-label={label} tabindex="0">
-        {cards.map((c) => (
-          <WorkCard work={c.work} variant="shelf" tag={tag} sub={c.sub} />
+        {cards.map((c, i) => (
+          <WorkCard work={c.work} variant="shelf" tag={tag} sub={c.sub} eager={i < eager} />
         ))}
+        <slot name="end" />
       </div>
     </div>
   ) : (

@@ -25,5 +25,7 @@
   --font-title: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
   --font: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
   --maxw: 1200px;
+  --cover-w: 160px;          /* 縦長の表紙（公式の一覧用 147×200）を出す最大の幅。これ以上は引き伸ばさない */
+  --cover-w-lg: 148px;       /* 横長の行（出演者ページの上位3件）に置く表紙の幅 */
   color-scheme: dark;
 }

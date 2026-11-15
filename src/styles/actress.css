@@ -14,8 +14,6 @@
 @media (min-width: 640px) { .rank-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .rank-item { display: grid; gap: var(--sp); align-content: start; min-width: 0; padding-top: calc(var(--sp) * 1.5); border-top: 1px solid var(--line-strong); }
 .rank-head { display: flex; align-items: baseline; gap: 14px; }
-/* 順位は明朝の大きな数字（円や塗りは使わない） */
-.rank-no { font: 700 44px/1 var(--font-display); color: var(--accent); font-variant-numeric: tabular-nums; min-width: 1.1em; }
 .rank-stat, .rank-labels { margin: 0; }
 .rank-stat { color: var(--fg1); font-size: 13px; }
 .rank-actions { display: flex; flex-wrap: wrap; gap: var(--sp); }
