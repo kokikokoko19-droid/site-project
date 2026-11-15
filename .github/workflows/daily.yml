@@ -192,8 +192,19 @@ jobs:
         run: |
           umask 077
           mkdir -p ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          # 秘密鍵は「-----BEGIN で始まる本文」でも「その base64（1行）」でもよい。CR は取り除く
+          key=$(printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r')
+          case "$key" in
+            *"-----BEGIN"*) printf '%s\n' "$key" > ~/.ssh/deploy_key ;;
+            *) printf '%s' "$key" | tr -d ' \n' | base64 -d > ~/.ssh/deploy_key 2>/dev/null || { echo "::error title=鍵の形式::DEPLOY_SSH_KEY が秘密鍵（-----BEGIN OPENSSH PRIVATE KEY-----）でも、その base64 でもありません（docs/07 5.3 節）。"; exit 1; } ;;
+          esac
           chmod 600 ~/.ssh/deploy_key
+          # 読める鍵かを先に確かめ、指紋を出す（cPanel に登録した公開鍵と同じ鍵かの確認に使う）
+          if ! ssh-keygen -l -f ~/.ssh/deploy_key > /tmp/deploy_key_fp.txt 2>&1; then
+            echo "::error title=鍵を読めない::DEPLOY_SSH_KEY の中身が壊れています（$(head -1 /tmp/deploy_key_fp.txt)）。base64 -i ~/Desktop/avmeguri_deploy | pbcopy で貼り直してください（docs/07 5.3 節）。"
+            exit 1
+          fi
+          echo "配信用の鍵の指紋: $(cut -d' ' -f1,2 /tmp/deploy_key_fp.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
           # ホストの公開鍵を取得して登録する（初回の接続で確認を求められないようにする）
           ssh-keyscan -p "${DEPLOY_PORT:-22}" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
