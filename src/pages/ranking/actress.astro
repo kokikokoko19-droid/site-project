@@ -1,5 +1,6 @@
 ---
 // 出演者ランキング（/ranking/actress/）。ベイズ平均の高い順に上位50人。順位は機械的に決める。
+// 1 人 1 行のカード（表はやめた。第三者レビュー A I4、B-13）
 import '../../styles/actress.css';
 import Base from '../../layouts/Base.astro';
 import AdSlot from '../../components/AdSlot.astro';
@@ -25,7 +26,7 @@ const rows = ranked.map((s) => {
   dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
 >
   <Breadcrumb items={[{ href: '/', label: 'トップ' }, { href: '/ranking/', label: 'ランキング' }, { label: '出演者ランキング' }]} />
-  <section class="section" style="margin-top: 8px">
+  <section class="section-s" style="margin-top: 8px">
     <h1>出演者ランキング</h1>
     <div class="editorial">
       <!-- TODO: 運営者が記入 -->
@@ -34,30 +35,37 @@ const rows = ranked.map((s) => {
     <p class="muted">作品3件以上の出演者を、レビュー平均を件数で補正した値（ベイズ平均）の高い順に並べています。</p>
   </section>
 
-  <section class="section">
+  <section class="section-s">
     {
       rows.length === 0 ? (
         <div class="empty"><p>ランキングの対象になる出演者がまだいません。</p></div>
       ) : (
-        <div class="rank-table-wrap">
-          <table class="rank-table">
-            <thead>
-              <tr><th>順位</th><th>出演者</th><th>作品数</th><th>平均評価</th><th>レビュー総数</th><th>代表作</th></tr>
-            </thead>
-            <tbody>
-              {rows.map(({ s, best }, i) => (
-                <tr>
-                  <td data-label="順位">{i + 1}</td>
-                  <td data-label="出演者"><a href={`/actress/${s.id}/`}>{s.name}</a></td>
-                  <td data-label="作品数">{s.works}件</td>
-                  <td data-label="平均評価">{s.reviewAvg !== null ? s.reviewAvg.toFixed(2) : '-'}</td>
-                  <td data-label="レビュー総数">{s.reviewTotal}件</td>
-                  <td data-label="代表作">{best ? <a href={`/v/${best.contentId}/`}>{best.title}</a> : '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        /* 1 人 1 行（順位・名前・代表作の表紙・作品数と★平均）。顔写真は使わず、代表作の表紙で代える（B-13） */
+        <ol class="ar-list">
+          {rows.map(({ s, best }, i) => {
+            const cover = best ? best.imageLarge || best.imageList || best.imageSmall : null;
+            return (
+              <li class="ar-row">
+                <span class="rank-no" role="img" aria-label={`${i + 1}位`}>{i + 1}</span>
+                {best ? (
+                  <a class="ar-cover" href={`/v/${best.contentId}/`} tabindex="-1" aria-hidden="true">
+                    {cover && <img src={cover} alt="" width="800" height="538" loading={i < 4 ? 'eager' : 'lazy'} decoding="async" />}
+                  </a>
+                ) : (
+                  <span class="ar-cover" aria-hidden="true"></span>
+                )}
+                <div class="ar-body">
+                  <a class="ar-name" href={`/actress/${s.id}/`}>{s.name}</a>
+                  <div class="ar-stat">
+                    <span>作品 <b>{s.works}</b>件</span>
+                    {s.reviewAvg !== null && <span class="rate">★ {s.reviewAvg.toFixed(2)} <span class="dim">（{s.reviewTotal}件）</span></span>}
+                  </div>
+                  {best && <a class="ar-best" href={`/v/${best.contentId}/`}><span class="dim">代表作</span> {best.title}</a>}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
       )
     }
   </section>

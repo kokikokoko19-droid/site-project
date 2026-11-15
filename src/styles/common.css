@@ -458,3 +458,21 @@ body.show-ad-slots .ad-slot { display: flex; }
   .new-toggles .new-count { margin-left: 0; }
 }
 .new-facet .chip[hidden], .new-tabs .chip[hidden] { display: none; }
+
+/* ---- ランキング（A I4、B-13） ---- */
+.rank-tabs { display: flex; gap: var(--sp); margin: calc(var(--sp) * 2) 0 var(--sp); }
+.rank-tabs .chip { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 96px; font-size: 14px; }
+.rank-tabs .chip[aria-current] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+/* 出演者ランキングの 1 行カード。表紙は代表作の横長ジャケットを比率どおりに（切り取らない） */
+.ar-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line-strong); }
+.ar-row { display: grid; grid-template-columns: 2.4em var(--cover-w-lg) minmax(0, 1fr); gap: calc(var(--sp) * 2); align-items: center; padding: calc(var(--sp) * 1.5) 0; border-bottom: 1px solid var(--line); }
+.ar-row .rank-no { font-size: 30px; min-width: 0; text-align: center; }
+.ar-cover { position: relative; display: block; aspect-ratio: 800 / 538; overflow: hidden; border-radius: 3px; background: var(--bg2); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
+.ar-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.ar-body { display: grid; gap: 4px; min-width: 0; }
+.ar-name { font: 700 18px/1.4 var(--font-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-name:hover, .ar-best:hover { color: var(--accent); }
+.ar-stat { display: flex; flex-wrap: wrap; gap: 2px 14px; color: var(--fg1); font-size: 13px; white-space: nowrap; }
+.ar-stat b { color: var(--fg0); font-variant-numeric: tabular-nums; }
+.ar-best { color: var(--fg1); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (max-width: 479px) { .ar-row { grid-template-columns: 1.8em 112px minmax(0, 1fr); gap: 12px; } .ar-row .rank-no { font-size: 24px; } .ar-name { font-size: 16px; } }
