@@ -145,6 +145,34 @@ describe('loadCatalog', () => {
     assert.deepEqual(ids(c.todays()), ['0001']);
     assert.deepEqual(ids(c.similar(c.byId.get('0001')!)), ['0002', '0003']);
   });
+  describe('サンプル動画URLのアフィリエイトID', () => {
+    const SIZES = { size_560_360: 'https://www.dmm.co.jp/litevideo/-/part/=/affi_id=api-990/cid=abc/size=560_360/' };
+    const savedEnv = { m: process.env.AFFILIATE_LINKS, s: process.env.FANZA_SITE_AFFILIATE_ID };
+    const restore = () => {
+      if (savedEnv.m === undefined) delete process.env.AFFILIATE_LINKS; else process.env.AFFILIATE_LINKS = savedEnv.m;
+      if (savedEnv.s === undefined) delete process.env.FANZA_SITE_AFFILIATE_ID; else process.env.FANZA_SITE_AFFILIATE_ID = savedEnv.s;
+    };
+    const movieUrl = () => {
+      const c = loadCatalog({ exportDir: writeExport([mk('0401', { sampleMovie: { sizes: SIZES } as never })]), force: true });
+      return (c.works[0].sampleMovie as unknown as { sizes: Record<string, string> }).sizes.size_560_360;
+    };
+    it('off（承認前）では affi_id を取り除く（サイト用IDがあっても入れない）', () => {
+      try {
+        process.env.AFFILIATE_LINKS = 'off';
+        process.env.FANZA_SITE_AFFILIATE_ID = 'site-003';
+        assert.equal(movieUrl(), 'https://www.dmm.co.jp/litevideo/-/part/=/cid=abc/size=560_360/');
+      } finally { restore(); }
+    });
+    it('on ではサイト用IDに差し替える（未設定なら無変更）', () => {
+      try {
+        process.env.AFFILIATE_LINKS = 'on';
+        process.env.FANZA_SITE_AFFILIATE_ID = 'site-003';
+        assert.equal(movieUrl(), 'https://www.dmm.co.jp/litevideo/-/part/=/affi_id=site-003/cid=abc/size=560_360/');
+        delete process.env.FANZA_SITE_AFFILIATE_ID;
+        assert.equal(movieUrl(), SIZES.size_560_360);
+      } finally { restore(); }
+    });
+  });
   it('メタが空でも、配列項目が欠けた作品でも読める（null・空配列で補う）', () => {
     const { derivedLabels: _a, similarIds: _b, genres: _c, ...bare } = mk('0101');
     const c = loadCatalog({ exportDir: writeExport([bare]) });

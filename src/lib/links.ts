@@ -31,6 +31,20 @@ export function rewriteAffiliateId(url: string, siteId: string | null): string {
 }
 
 /**
+ * litevideo（サンプル動画の埋め込み）の URL から affi_id の区切りを取り除く。承認前（affiliateMode が off）に使う。
+ * パス形式 `/affi_id=xxx/` は区切りごと、クエリ形式 `?affi_id=xxx&...` や `&affi_id=xxx` も取り除く。
+ * litevideo 以外のURLや affi_id を含まないURLは変更しない。
+ */
+export function stripAffiliateId(url: string): string {
+  if (!url.includes('litevideo')) return url;
+  return url
+    .replace(/\/affi_id=[^/?#&]*(?=\/|$|[?#])/g, '')
+    .replace(/\?affi_id=[^&#]*&?/, '?')
+    .replace(/&affi_id=[^&#]*/, '')
+    .replace(/\?(?=#|$)/, '');
+}
+
+/**
  * 「FANZAで見る」の移動先。on かつ affiliateUrl があればそれ、なければ公式の商品ページ（IDなし）。
  * http(s) 以外のURLは使わない。どちらも無ければ null（ボタンも /go/ ページも作らない）。
  */
