@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { VARIANT_COUNT, cardText, hash, pageText, postText, renderCard, renderPage, renderPost, variantOf } from '../src/lib/autotext.ts';
+import { VARIANT_COUNT, cardText, hash, pageText, positionOf, postText, renderCard, renderPage, renderPost, renderSummary, summaryText, variantOf } from '../src/lib/autotext.ts';
+import { buildCatalog } from '../src/lib/catalog.ts';
 import type { CatalogWork } from '../src/lib/catalog.ts';
 import { fmtDate, minutes, yen, ymd } from '../src/lib/format.ts';
 
@@ -19,7 +20,7 @@ function mk(over: Partial<CatalogWork> = {}): CatalogWork {
 }
 const refs = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, name: `${prefix}${String(i + 1).padStart(2, '0')}` }));
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
-const KINDS = ['page', 'card', 'post'] as const;
+const KINDS = ['page', 'summary', 'card', 'post'] as const;
 
 const BAD = ['不明', 'null', 'undefined', 'NaN', '―', '。。', '、。', '・・'];
 /** 欠損の代替表示・区切りの連続・区切りで始まる文が無いこと */
@@ -47,23 +48,25 @@ const CASES: Record<string, CatalogWork> = {
 describe('欠損時の自動文', () => {
   for (const [name, w] of Object.entries(CASES)) {
     it(`${name}: 全文型で不正な文字列・区切りが出ない`, () => {
-      for (const v of range(VARIANT_COUNT.page)) assertClean(renderPage(w, v), `page#${v}`);
+      const ctx = { series: { name: 'シリーズ01', nth: 3, total: 12 }, actress: { name: '出演者A', nth: 5, total: 24 }, ratingTop: 10 };
+      for (const v of range(VARIANT_COUNT.page)) { assertClean(renderPage(w, v), `page#${v}`); assertClean(renderPage(w, v, ctx), `page+ctx#${v}`); }
+      for (const v of range(VARIANT_COUNT.summary)) assertClean(renderSummary(w, v), `summary#${v}`);
       for (const v of range(VARIANT_COUNT.card)) assertClean(renderCard(w, v), `card#${v}`);
       for (const v of range(VARIANT_COUNT.post)) {
         const t = renderPost(w, v);
         assertClean(t, `post#${v}`);
         assert.ok(t.length <= 140 && t.endsWith(' #PR'), `post#${v}: ${t}`);
       }
-      assertClean(pageText(w), 'pageText'); assertClean(cardText(w), 'cardText'); assertClean(postText(w), 'postText');
+      assertClean(pageText(w), 'pageText'); assertClean(summaryText(w), 'summaryText'); assertClean(cardText(w), 'cardText'); assertClean(postText(w), 'postText');
     });
   }
   it('全部なしでも例外にならず、投稿は題名だけになる（ページ・カードは空）', () => {
     const w = CASES['全部なし'];
-    assert.equal(pageText(w), ''); assert.equal(cardText(w), '');
+    assert.equal(pageText(w), ''); assert.equal(summaryText(w), ''); assert.equal(cardText(w), '');
     assert.equal(postText(w), '「作品 0001」。 #PR');
   });
   it('欠けた項目の句だけが消える', () => {
-    const has = (w: CatalogWork, s: string) => range(5).forEach((v) => assert.ok(!renderPage(w, v).includes(s), `page#${v} に ${s}`));
+    const has = (w: CatalogWork, s: string) => range(5).forEach((v) => assert.ok(!renderSummary(w, v).includes(s), `page#${v} に ${s}`));
     has(CASES['レビューなし'], 'レビュー'); has(CASES['価格なし'], '円'); has(CASES['尺なし'], '分');
     has(CASES['日付なし'], '配信開始'); has(CASES['ジャンルなし'], 'ジャンル'); has(CASES['ジャンルなし'], 'タグは');
     assert.ok(!cardText(CASES['レビューなし']).includes('点'));
@@ -71,11 +74,11 @@ describe('欠損時の自動文', () => {
   });
   it('レビュー件数があっても平均が無ければレビュー句は出さない', () => {
     const w = mk({ reviewCount: 5, reviewAvg: null });
-    for (const v of range(5)) assert.ok(!renderPage(w, v).includes('レビュー') && !renderCard(w, v).includes('件'));
+    for (const v of range(5)) assert.ok(!renderSummary(w, v).includes('レビュー') && !renderCard(w, v).includes('件'));
   });
   it('項目の末尾の読点・句点は落として組み立てる', () => {
     const w = mk({ makers: [{ id: 'm', name: 'メーカー01。' }], genres: [{ id: 'g', name: 'タグ01、' }], actresses: [{ id: 'a', name: '出演者A、' }] });
-    for (const v of range(5)) assertClean(renderPage(w, v), `page#${v}`);
+    for (const v of range(5)) assertClean(renderSummary(w, v), `page#${v}`);
   });
   it('カードは選んだ文型が空でも、次の文型で埋める', () => {
     const onlyDate = mk({ actresses: [], makers: [], series: [], genres: [], volumeMin: null, reviewCount: 0, reviewAvg: null, priceMin: null, listPrice: null });
@@ -86,31 +89,31 @@ describe('欠損時の自動文', () => {
 describe('各句の組み立て', () => {
   it('全部あり: 出演者・シリーズ・尺・日付・ジャンル・レビュー・ラベルが全文型に入る', () => {
     for (const v of range(5)) {
-      const t = renderPage(CASES['全部あり'], v);
+      const t = renderSummary(CASES['全部あり'], v);
       for (const s of ['出演者A、出演者B出演', '120分', 'タグ01、タグ02', 'レビューは4.3点（120件）。', '配信が始まったばかりの新作です。', 'シリーズ01']) assert.ok(t.includes(s), `page#${v} に ${s}: ${t}`);
       const sentences = t.split('。').filter(Boolean).length;
       assert.ok(sentences >= 3 && sentences <= 6, `page#${v} は ${sentences} 文: ${t}`);
     }
-    assert.ok(renderPage(CASES['全部あり'], 0).startsWith('出演者A、出演者B出演、メーカー01のシリーズ01の1本。120分、2026/11/01配信開始。'));
-    for (const v of [1, 2, 4]) assert.ok(renderPage(CASES['全部あり'], v).includes('セール中は1,480円（通常1,980円）。'));
+    assert.ok(renderSummary(CASES['全部あり'], 0).startsWith('出演者A、出演者B出演、メーカー01のシリーズ01の1本。120分、2026/11/01配信開始。'));
+    for (const v of [1, 2, 4]) assert.ok(renderSummary(CASES['全部あり'], v).includes('セール中は1,480円（通常1,980円）。'));
   });
   it('シリーズなしは「{メーカー}の作品」、出演者なしはメーカー名＋「制作」で名前を重ねない', () => {
-    assert.ok(renderPage(CASES['シリーズなし'], 0).startsWith('出演者A、出演者B出演、メーカー01の作品。'));
+    assert.ok(renderSummary(CASES['シリーズなし'], 0).startsWith('出演者A、出演者B出演、メーカー01の作品。'));
     for (const v of range(5)) {
-      const t = renderPage(CASES['出演者なし'], v);
+      const t = renderSummary(CASES['出演者なし'], v);
       assert.ok(t.includes('メーカー01') && !t.includes('出演'), `page#${v}: ${t}`);
       assert.equal(t.split('メーカー01').length - 1, 1, `page#${v} でメーカー名が重なる: ${t}`);
     }
-    assert.ok(renderPage(CASES['出演者なし'], 0).startsWith('メーカー01制作、シリーズ01の1本。'));
+    assert.ok(renderSummary(CASES['出演者なし'], 0).startsWith('メーカー01制作、シリーズ01の1本。'));
   });
   it('価格句: セール中は通常価格つき、定価が無い・高くないときは単価のみ', () => {
-    assert.ok(renderPage(mk({ listPrice: 1480 }), 1).includes('価格は1,480円。'));
-    assert.ok(!renderPage(mk({ listPrice: null }), 1).includes('通常'));
-    assert.ok(renderPage(mk({ derivedLabels: ['新作'] }), 1).includes('価格は1,480円。'));   // 定価が高くてもセール中ラベルが無ければ単価のみ
-    assert.ok(renderPage(mk(), 1).includes('セール中は1,480円（通常1,980円）。'));
+    assert.ok(renderSummary(mk({ listPrice: 1480 }), 1).includes('価格は1,480円。'));
+    assert.ok(!renderSummary(mk({ listPrice: null }), 1).includes('通常'));
+    assert.ok(renderSummary(mk({ derivedLabels: ['新作'] }), 1).includes('価格は1,480円。'));   // 定価が高くてもセール中ラベルが無ければ単価のみ
+    assert.ok(renderSummary(mk(), 1).includes('セール中は1,480円（通常1,980円）。'));
   });
   it('ラベル句: 優先順に1つだけ。高評価などは句なし', () => {
-    const note = (labels: CatalogWork['derivedLabels']) => renderPage(mk({ derivedLabels: labels }), 0);
+    const note = (labels: CatalogWork['derivedLabels']) => renderSummary(mk({ derivedLabels: labels }), 0);
     assert.ok(note(['新作', '初見向け']).endsWith('入口に向いています。'));
     assert.ok(note(['定番', '長尺']).endsWith('見られ続けている定番です。'));
     assert.ok(note(['長尺']).endsWith('長尺作品です。') && note(['短尺']).endsWith('短尺作品です。'));
@@ -119,8 +122,8 @@ describe('各句の組み立て', () => {
   });
   it('出演者が多いときは「ほか」で省く（ページは8人、投稿は3人まで）', () => {
     const w = mk({ actresses: refs('出演者', 12) });
-    assert.ok(renderPage(w, 0).startsWith('出演者01、出演者02、出演者03、出演者04、出演者05、出演者06、出演者07、出演者08ほか出演、'));
-    assert.ok(!renderPage(w, 0).includes('出演者09'));
+    assert.ok(renderSummary(w, 0).startsWith('出演者01、出演者02、出演者03、出演者04、出演者05、出演者06、出演者07、出演者08ほか出演、'));
+    assert.ok(!renderSummary(w, 0).includes('出演者09'));
     assert.ok(renderPost(w, 0).includes('出演者01、出演者02、出演者03ほか出演') && !renderPost(w, 0).includes('出演者04'));
   });
 });
@@ -148,36 +151,70 @@ describe('X投稿', () => {
 describe('文型の選び方', () => {
   it('同じ作品は常に同じ文（複製しても、何度呼んでも）', () => {
     const w = mk();
-    for (const f of [pageText, cardText, postText]) assert.equal(f(w), f(structuredClone(w)));
+    for (const f of [pageText, summaryText, cardText, postText]) assert.equal(f(w), f(structuredClone(w)));
     assert.equal(pageText(w), pageText(w));
   });
-  it('contentId のハッシュで選ぶ。カードは + c、投稿は + p', () => {
-    assert.equal(variantOf('w0001', 'page'), hash('w0001') % 5);
+  it('contentId のハッシュで選ぶ。作品ページは + v、カードは + c、投稿は + p', () => {
+    assert.equal(variantOf('w0001', 'page'), hash('w0001v') % 3);
+    assert.equal(variantOf('w0001', 'summary'), hash('w0001') % 5);
     assert.equal(variantOf('w0001', 'card'), hash('w0001c') % 5);
     assert.equal(variantOf('w0001', 'post'), hash('w0001p') % 5);
     assert.ok(Number.isInteger(hash('w0001')) && hash('w0001') >= 0 && hash('w0001') <= 0xffffffff);
     assert.notEqual(hash('w0001'), hash('w0002'));
   });
-  it('300件で5種すべてが使われ、極端に偏らない', () => {
+  it('300件で全文型が使われ、極端に偏らない（作品ページは3種、ほかは5種）', () => {
     for (const kind of KINDS) {
       const counts = new Array<number>(VARIANT_COUNT[kind]).fill(0);
       for (const i of range(300)) counts[variantOf(`w${String(i).padStart(4, '0')}`, kind)]++;
-      assert.equal(VARIANT_COUNT[kind], 5);
-      assert.ok(counts.every((c) => c >= 30), `${kind}: ${counts.join(',')}`);
+      assert.equal(VARIANT_COUNT[kind], kind === 'page' ? 3 : 5);
+      assert.ok(counts.every((c) => c >= 150 / VARIANT_COUNT[kind]), `${kind}: ${counts.join(',')}`);
     }
   });
   it('同じ作品でも文型ごとに文が違い、違う作品では実際に文型が分かれる', () => {
     const w = mk();
-    assert.equal(new Set(range(5).map((v) => renderPage(w, v))).size, 5);
+    const ctx = { series: { name: 'シリーズ01', nth: 3, total: 12 } };
+    assert.equal(new Set(range(3).map((v) => renderPage(w, v, ctx))).size, 3);
+    assert.equal(new Set(range(5).map((v) => renderSummary(w, v))).size, 5);
     assert.equal(new Set(range(5).map((v) => renderCard(w, v))).size, 5);
     assert.equal(new Set(range(5).map((v) => renderPost(w, v))).size, 5);
-    const texts = range(300).map((i) => pageText(mk({ contentId: `w${String(i).padStart(4, '0')}` })));
+    const texts = range(300).map((i) => summaryText(mk({ contentId: `w${String(i).padStart(4, '0')}` })));
     assert.equal(new Set(texts).size, 5);
+    const pages = range(300).map((i) => pageText(mk({ contentId: `w${String(i).padStart(4, '0')}` }), ctx));
+    assert.equal(new Set(pages).size, 3);
   });
   it('文型の番号は整数のみ。範囲外は巡回する', () => {
-    assert.throws(() => renderPage(mk(), 1.5), RangeError);
-    assert.equal(renderPage(mk(), 5), renderPage(mk(), 0));
-    assert.equal(renderPage(mk(), -1), renderPage(mk(), 4));
+    assert.throws(() => renderSummary(mk(), 1.5), RangeError);
+    assert.equal(renderSummary(mk(), 5), renderSummary(mk(), 0));
+    assert.equal(renderSummary(mk(), -1), renderSummary(mk(), 4));
+  });
+});
+
+describe('作品ページの本文（位置づけ）', () => {
+  const ctx = { series: { name: 'シリーズ01', nth: 3, total: 12 }, actress: { name: '出演者A', nth: 5, total: 24 }, ratingTop: 10 };
+  it('位置づけと評価の位置の2文に留め、仕様表の値（尺・日付・価格・ジャンル・点数）は繰り返さない', () => {
+    for (const v of range(3)) {
+      const t = renderPage(mk(), v, ctx);
+      assert.ok(t.includes('シリーズ01の3本目') && t.includes('出演者Aの出演作の5本目') && t.includes('上位10%'), `page#${v}: ${t}`);
+      for (const s of ['120分', '2026/11/01', '円', 'タグ01', '4.3点']) assert.ok(!t.includes(s), `page#${v} に ${s}: ${t}`);
+      assert.ok(t.split('。').filter(Boolean).length <= 2, `page#${v}: ${t}`);
+    }
+  });
+  it('評価が上位30%に入らないときはラベル句、位置が数えられないときは出演者とメーカー', () => {
+    assert.ok(renderPage(mk(), 0, { ...ctx, ratingTop: 60 }).endsWith('配信が始まったばかりの新作です。'));
+    assert.equal(renderPage(mk({ derivedLabels: [] }), 0, {}), '出演者A、出演者B出演、メーカー01のシリーズ01の1本。');
+    assert.ok(!renderPage(mk(), 0, { series: { name: 'シリーズ01', nth: 1, total: 1 } }).includes('1本目')); // 1作だけなら数えない
+  });
+  it('positionOf: 配信の古い順に数え、レビュー5件以上の作品の中で評価の上位割合を出す', () => {
+    const works = range(30).map((i) => mk({
+      contentId: `w${i}`, releasedAt: `2026-01-${String(i + 1).padStart(2, '0')}`, reviewCount: 10, reviewAvg: 1 + i / 10,
+      series: i < 4 ? [{ id: 's1', name: 'シリーズ01' }] : [], actresses: [{ id: 'a1', name: '出演者A' }],
+    }));
+    const catalog = buildCatalog(works);
+    const p = positionOf(catalog, catalog.byId.get('w2')!);
+    assert.deepEqual(p.series, { name: 'シリーズ01', nth: 3, total: 4 });
+    assert.deepEqual(p.actress, { name: '出演者A', nth: 3, total: 30 });
+    assert.equal(positionOf(catalog, catalog.byId.get('w29')!).ratingTop, 4); // 30件中1位 → 上位4%
+    assert.equal(positionOf(buildCatalog([mk({ reviewCount: 3 })]), mk({ reviewCount: 3 })).ratingTop, null);
   });
 });
 
