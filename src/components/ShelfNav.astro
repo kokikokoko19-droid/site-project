@@ -1,0 +1,26 @@
+---
+// 「隣の棚へ」。軸ページ（ジャンル・メーカー・シリーズ）の下部に置き、同じ軸の中で作品数が近い棚へ渡り歩けるようにする
+// （docs/08 8 章「ジャンル別・女優別の棚を歩いて渡る」）。並びは src/lib/shelves.ts の neighborRefs（前後 2 件ずつ）。
+// .entry は計測（public/analytics/events.js の axis_nav）が見るクラス。中にはチップ（軸へのリンク）だけを置く。
+import type { RefItem } from '../lib/shelves.ts';
+
+interface Props {
+  kind: 'actress' | 'series' | 'maker' | 'genre';
+  items: RefItem[];
+}
+
+const { kind, items } = Astro.props;
+---
+
+{
+  items.length > 0 && (
+    <nav class="shelf-nav entry" aria-label="隣の棚へ" data-place="shelf-nav">
+      <div class="section-head"><h2 class="h-s">隣の棚へ</h2><a href="/stroll/">ぶらぶらする →</a></div>
+      <div class="chips">
+        {items.map((it) => (
+          <a class="chip" href={`/${kind}/${encodeURIComponent(it.id)}/`}>{it.name}<span class="n">{it.count}</span></a>
+        ))}
+      </div>
+    </nav>
+  )
+}

@@ -12,6 +12,8 @@ export interface CardWork {
   id: string;
   title: string;
   imageSmall: string | null;
+  /** 公式配信の横長の大きいジャケット（800px 級）。カードの主役。無ければ imageSmall で代える */
+  imageLarge: string | null;
   actresses: string[];
   maker: string | null;
   cardText: string | null;
@@ -54,6 +56,7 @@ export function toCard(w: CatalogWork, opts: { omitLabels?: DerivedLabel[] } = {
     id: w.contentId,
     title: w.title,
     imageSmall: w.imageSmall,
+    imageLarge: w.imageLarge ?? null,
     actresses: w.actresses.map((a) => a.name),
     maker: w.makers[0]?.name ?? null,
     cardText: cardText(w),
