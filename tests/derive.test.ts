@@ -198,3 +198,29 @@ test('runDerive: 合成データ80件で全作品に似た作品が付き、simi
   assert.deepEqual(runDerive(db, { now: NOW, similarN: 3 }), r);
   assert.ok(works.every((w) => db.getSimilar(w.contentId).length === 3));
 });
+
+test('runDerive: publish を渡すと、ラベル・似た作品・ランキング・今日の候補を公開対象だけで計算する', () => {
+  const db = openDb(':memory:');
+  const policy = { recentMonths: 3, minReviews: 20, includeRanked: true, includeFollowed: true };
+  const follow = { actresses: [], series: [{ id: 's9' }], makers: [] };
+  // 0〜3: 公開（直近、レビュー多数、人気順あり、指定シリーズ）。4〜5: 非公開（古くてレビュー少）
+  const works = [
+    makeWork(0, { releasedAt: ago(10), genres: G(1) }),
+    makeWork(1, { releasedAt: '2022-01-01', reviewCount: 80, reviewAvg: 4.8, genres: G(1) }),
+    makeWork(2, { releasedAt: '2022-01-01', rankPosition: 3, genres: G(1) }),
+    makeWork(3, { releasedAt: '2022-01-01', series: [ref('s9', 'シリーズA')], genres: G(1) }),
+    makeWork(4, { releasedAt: '2022-01-01', reviewCount: 5, reviewAvg: 5, volumeMin: 200, genres: G(1) }), // 長尺のラベルが付く
+    makeWork(5, { releasedAt: null, genres: G(1) }),
+  ];
+  db.upsertWorks(works);
+  runDerive(db, { now: NOW }); // まず全件で計算して、非公開の作品にもラベルを付けておく
+  assert.ok(db.getLabels(works[4].contentId).length > 0);
+  const r = runDerive(db, { now: NOW, publish: { now: NOW, follow, policy } });
+  const pub = works.slice(0, 4).map((w) => w.contentId).sort(), hidden = works.slice(4).map((w) => w.contentId);
+  assert.equal(r.works, 4);
+  const rk = JSON.parse(db.getMeta('rankings') as string);
+  for (const list of Object.values(rk) as string[][]) assert.deepEqual([...list].sort(), pub);
+  for (const id of JSON.parse(db.getMeta('todays') as string)) assert.ok(pub.includes(id));
+  for (const id of pub) for (const s of db.getSimilar(id)) assert.ok(pub.includes(s.similarId));
+  for (const id of hidden) assert.deepEqual(db.getLabels(id), []); // 外れた作品の古いラベルは消える
+});

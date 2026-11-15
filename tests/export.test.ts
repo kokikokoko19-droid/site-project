@@ -123,3 +123,30 @@ test('exportAll: 出力先を作り、前回の余ったチャンクだけを消
   assert.deepEqual(exportAll(openDb(':memory:'), out), { works: 0, chunks: 0 });
   assert.deepEqual([read(out, 'works.json'), read(out, 'index.json').chunks, readdirSync(out).includes('works-000.json')], [[], [], false]);
 }));
+
+test('exportAll: publish を渡すと、公開対象の作品だけを全ファイル（チャンク・works.json・meta・index・actresses）に出す', () => withDir((out) => {
+  const db = openDb(':memory:');
+  const policy = { recentMonths: 3, minReviews: 20, includeRanked: true, includeFollowed: true };
+  const publish = { now: NOW, policy, follow: { actresses: [], series: [], makers: [{ id: 'm9' }] } };
+  const works = [
+    makeWork(0, { releasedAt: '2026-10-01T10:00:00', actresses: [ref('a0', '出演者A')] }), // 直近
+    makeWork(1, { reviewCount: 30, actresses: [ref('a1', '出演者B')] }), // レビュー多数
+    makeWork(2, { rankPosition: 7 }), // 人気順
+    makeWork(3, { makers: [ref('m9', 'メーカーZ')] }), // 指定メーカー
+    makeWork(4, { reviewCount: 3, actresses: [ref('a4', '出演者X')], makers: [ref('m4', 'メーカーX')] }), // 非公開
+  ];
+  db.upsertWorks(works);
+  db.upsertActressProfiles(['a0', 'a1', 'a4'].map((id) => ({
+    id, name: id, ruby: null, birthday: null, bloodType: null, hobby: null, prefectures: null, height: null, bust: null, waist: null, hip: null, cup: null, listUrl: null, fetchedAt: '2026-11-01T00:00:00.000Z',
+  })));
+  runDerive(db, { now: NOW, publish });
+  assert.equal(exportAll(db, out, { now: NOW, publish }).works, 4);
+  const hidden = works[4].contentId;
+  assert.equal(read(out, 'index.json').total, 4);
+  assert.deepEqual(read(out, 'actresses.json').map((a: any) => a.id), ['a0', 'a1']);
+  for (const f of readdirSync(out)) {
+    const text = readFileSync(join(out, f), 'utf8');
+    for (const s of [`"${hidden}"`, '出演者X', 'メーカーX']) assert.ok(!text.includes(s), `${f} に ${s}`);
+  }
+  assert.equal(exportAll(db, out, { now: NOW }).works, 5); // 渡さなければ active の全件（従来どおり）
+}));
