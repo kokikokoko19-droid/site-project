@@ -3,7 +3,9 @@
 // API の sampleMovieURL（sizes）をそのまま iframe で使う。手組みのURLは使わない。
 // 初期HTMLには iframe を出さない。最初は枠とボタンだけを出し、押されたときに iframe を差し込む
 // （公式プレーヤーの読み込みを再生時まで遅らせ、初期表示を軽く保つため）。
-// 動画が無い作品（sampleMovie が null）では何も出さない。見た目は v2 の丸い再生ボタン。
+// 動画が無い作品（sampleMovie が null）では何も出さない。
+// 見た目: 枠の中に作品の主画像（poster。切り取らず contain で表示）、その下に幅いっぱいの「▶ サンプル動画を再生」ボタン。
+// 画像の上にボタンや文字は重ねない。自動再生はしない（公式プレーヤーが iframe での自動再生を許さず、通信量も大きいため）。
 import type { SampleMovie } from '../data/types.ts';
 
 interface Props {
@@ -12,9 +14,13 @@ interface Props {
   title?: string;
   /** 動画があるときだけ、枠の上に出す見出し（作品ページ用）。省略すると出さない */
   heading?: string;
+  /** 枠に表示する作品の主画像の URL（公式配信の直リンク。imageLarge、無ければ imageSmall）。省略するとボタンだけを出す */
+  poster?: string | null;
+  /** poster の代替テキスト */
+  posterAlt?: string;
 }
 
-const { movie = null, title = '', heading = '' } = Astro.props;
+const { movie = null, title = '', heading = '', poster = null, posterAlt = '' } = Astro.props;
 
 /** 使うサイズの優先順。大きいものから（先に見つかったものを採る） */
 const SIZE_KEYS = ['size_720_480', 'size_644_414', 'size_560_360', 'size_476_306'] as const;
@@ -42,9 +48,12 @@ const PLAYER_SCRIPT = `(function () {
     frame.setAttribute('allowfullscreen', '');
     frame.setAttribute('loading', 'lazy');
     frame.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
-    box.textContent = '';
+    var area = box.querySelector('.sm-frame');
+    if (!area) { area = document.createElement('div'); area.className = 'sm-frame'; box.insertBefore(area, box.firstChild); }
+    area.textContent = '';
+    area.classList.add('is-playing');
+    area.appendChild(frame);
     box.classList.add('is-playing');
-    box.appendChild(frame);
     frame.focus();
   });
 })();`;
@@ -54,10 +63,15 @@ const PLAYER_SCRIPT = `(function () {
   src && (
     <div>
       {heading && <div class="section-head"><h2>{heading}</h2></div>}
-      <div class="video" data-sample-movie data-src={src} data-title={frameTitle}>
-        {/* 丸い再生ボタン。押すと公式プレーヤーの iframe を差し込む（スクリプトは data-sample-play を見る） */}
-        <button class="play" type="button" data-sample-play aria-label="サンプル動画を再生"><span aria-hidden="true">▶</span></button>
-        <div>サンプル動画を再生<span class="dim">　公式プレーヤーを読み込みます</span></div>
+      <div class="sm" data-sample-movie data-src={src} data-title={frameTitle}>
+        {/* 枠全体のクリックでも再生する（キーボードや読み上げは下のボタンを使うので、枠は操作対象にしない） */}
+        {poster && (
+          <div class="sm-frame" data-sample-play>
+            <img src={poster} alt={posterAlt} loading="lazy" decoding="async" />
+          </div>
+        )}
+        <button class="btn btn-cta btn-block sm-btn" type="button" data-sample-play><span aria-hidden="true">▶</span> サンプル動画を再生</button>
+        <p class="sm-note">公式プレーヤーを読み込みます（音が出ることがあります）</p>
       </div>
     </div>
   )
@@ -65,32 +79,16 @@ const PLAYER_SCRIPT = `(function () {
 {src && <script is:inline set:html={PLAYER_SCRIPT} />}
 
 <style is:global>
-  /* is:global にする理由: 全要素に属性が付くのを避ける。data-sample-movie はこの部品でしか使わない。
+  /* is:global にする理由: 全要素に属性が付くのを避ける。クラス名は .sm で始め、data-sample-movie はこの部品でしか使わない。
      公式プレーヤーの主なサイズ（720x480 など）は 3:2 に近いので、差し込みの前後で高さが変わらないよう枠も 3:2 にする。
-     幅の上限は最大サイズの 720px（それ以上に広げるとぼやける） */
-  .video[data-sample-movie] {
-    position: relative;
-    width: 100%;
-    max-width: 720px;
-    aspect-ratio: 3 / 2;
-    gap: calc(var(--sp) * 1.5);
-    padding: 0 calc(var(--sp) * 2);
-    overflow: hidden;
-    text-align: center;
-  }
-  .video[data-sample-movie].is-playing {
-    display: block;
-    padding: 0;
-    background: #000;
-  }
-  .video[data-sample-movie].is-playing::before {
-    content: none;
-  }
-  .video[data-sample-movie] iframe {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-  }
+     幅の上限は最大サイズの 720px（それ以上に広げるとぼやける）。主画像は切り取らず contain で収める */
+  .sm { display: grid; gap: calc(var(--sp) * 1.5); width: 100%; max-width: 720px; }
+  .sm-frame { position: relative; aspect-ratio: 3 / 2; overflow: hidden; border-radius: 3px; background: var(--bg2); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); cursor: pointer; }
+  .sm-frame img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .sm-frame.is-playing { cursor: auto; background: #000; }
+  .sm-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .sm .sm-btn { min-height: 48px; font-size: 15px; }
+  .sm-note { margin: 0; color: var(--fg2); font-size: 11.5px; line-height: 1.5; text-align: center; }
+  /* 再生が始まったらボタンと注記は畳む（枠が iframe になる） */
+  .sm.is-playing .sm-btn, .sm.is-playing .sm-note { display: none; }
 </style>
