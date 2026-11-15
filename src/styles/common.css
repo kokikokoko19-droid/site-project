@@ -203,8 +203,8 @@ p { margin: 0; }
 .detail { display: grid; gap: calc(var(--sp) * 3); }
 @media (min-width: 960px) { .detail { grid-template-columns: 360px minmax(0, 1fr); gap: calc(var(--sp) * 5); align-items: start; } }
 .stack { display: grid; gap: calc(var(--sp) * 3); }
-.lead { position: relative; font: 500 16px/1.9 var(--font-display); color: var(--fg0); padding-left: 1.1em; }
-.lead::before { content: "「"; position: absolute; left: -.35em; top: -.5em; font-size: 2.4em; line-height: 1; color: var(--accent); opacity: .55; }
+/* 自動文の段落。明朝と「」の装飾は運営者が書いた文（.letter .editorial）だけに使い、自動文は普通の段落にする（第三者レビュー B-6） */
+.lead { font: 400 15px/1.85 var(--font); color: var(--fg1); }
 .spec { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 0 calc(var(--sp) * 2); font-size: 13.5px; margin: 0; }
 .spec dt { color: var(--fg2); font-size: 12px; letter-spacing: .08em; padding: 7px 0; border-bottom: 1px dotted var(--line); }
 .spec dd { margin: 0; color: var(--fg0); padding: 7px 0; border-bottom: 1px dotted var(--line); min-width: 0; overflow-wrap: anywhere; }
