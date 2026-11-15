@@ -1,31 +1,302 @@
 ---
-// 新着。配信開始日の新しい順に60件。
+// 新着（/new/）。直近30日の配信と、近日配信（配信日が今日より後）を、配信日の見出しで区切って並べる。
+// 絞り込みは静的HTML＋小さなJS: 各作品に data-g（ジャンルID）・data-m・data-a・data-d（配信日）・data-sale・data-rated を持たせ、
+// 期間タブ・チップ・トグルで表示を切り替える。探索の JSON は読まない。条件は URL に残す（/new/?d=7&g=123）。
+// JS が無いときは操作部を隠し、全件を日付見出し付きで見せる。近日配信は「近日配信」タブ（JS 無しでは末尾の節）だけに出す。
 import Base from '../layouts/Base.astro';
 import AdSlot from '../components/AdSlot.astro';
 import Breadcrumb from '../components/Breadcrumb.astro';
-import WorkGrid from '../components/WorkGrid.astro';
+import WorkCard from '../components/WorkCard.astro';
 import { loadCatalog } from '../lib/catalog.ts';
+import type { CatalogWork } from '../lib/catalog.ts';
+import { toCard } from '../lib/card.ts';
+import { NEW_PERIODS, addDays, dayHeading, facetCounts, groupByDay, jstToday, releaseDay, splitNew } from '../lib/newlist.ts';
 
-const COUNT = 60;
+/** 1ページの件数（JS のページ送り） */
+const PER_PAGE = 60;
+/** チップに最初から見せる件数（残りは「もっと」で開く）と、HTMLに持たせる上限 */
+const FACET_SHOW = 8;
+const FACET_MAX = 40;
+/** 直近30日に1件も無いとき（データの取り込みが止まっているときなど）に代わりに出す件数 */
+const FALLBACK = 60;
+
 const catalog = loadCatalog();
-const works = catalog.recent(COUNT);
+const today = jstToday();
+const split = splitNew(catalog.recent(), today);
+const fallback = split.recent.length === 0;
+const recent = fallback ? catalog.recent().filter((w) => releaseDay(w) !== '' && releaseDay(w) <= today).slice(0, FALLBACK) : split.recent;
+const upcoming = split.upcoming;
+
+// 期間タブの件数（今日を含めて n 日）
+const tabs = NEW_PERIODS.map((p) => ({ ...p, count: recent.filter((w) => releaseDay(w) >= addDays(today, -(p.days - 1))).length }));
+
+// チップ（ジャンル・メーカー・出演者）。HTMLには直近30日の新着と近日配信で多い順に FACET_MAX 件まで持たせ、
+// 期間を変えたときの並べ直しと件数は JS が行う
+const facets = [
+  { key: 'g', label: 'ジャンル', items: facetCounts([...recent, ...upcoming], (w) => w.genres) },
+  { key: 'm', label: 'メーカー', items: facetCounts([...recent, ...upcoming], (w) => w.makers) },
+  { key: 'a', label: '出演者', items: facetCounts([...recent, ...upcoming], (w) => w.actresses) },
+].map((f) => ({ ...f, items: f.items.slice(0, FACET_MAX) }));
+
+const ids = (refs: { id: string }[]) => [...new Set(refs.map((r) => r.id).filter(Boolean))].join(' ');
+const item = (w: CatalogWork) => {
+  const card = toCard(w, { omitLabels: ['新作'] });
+  return {
+    card,
+    attrs: {
+      'data-g': ids(w.genres),
+      'data-m': ids(w.makers),
+      'data-a': ids(w.actresses),
+      'data-d': releaseDay(w),
+      'data-sale': card.sale ? '1' : '0',
+      'data-rated': w.reviewCount > 0 ? '1' : '0',
+    },
+  };
+};
+const recentDays = groupByDay(recent).map((g) => ({ ...g, items: g.works.map(item) }));
+const soonDays = groupByDay(upcoming).map((g) => ({ ...g, items: g.works.map(item) }));
+const EXPLORE = '/explore/?sort=new';
 ---
 
 <Base
   title="新着"
-  description="配信が始まったばかりの作品を、配信開始日の新しい順に並べています。"
+  description="配信が始まったばかりの作品を、配信日ごとに並べています。期間・ジャンル・メーカー・出演者で絞り込めます。近日配信の作品も確認できます。"
   dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
 >
   <Breadcrumb items={[{ href: '/', label: 'トップ' }, { label: '新着' }]} />
-  <section class="section" style="margin-top: 8px">
-    <h1>新着</h1>
-    {works.length > 0 && <p class="muted">配信開始日の新しい順に{works.length}件</p>}
-  </section>
+  {/* JS が無いときは操作部を隠す（全件が日付見出し付きで見える） */}
+  <noscript><style is:inline>.new-controls, .new-pager { display: none !important; }</style></noscript>
 
-  <section class="section">
-    <WorkGrid works={works} empty="作品データを準備中です。" omitLabels={['新作']} />
-    <p style="margin-top: 16px"><a class="btn" href="/explore/">探索ページで条件を絞って探す</a></p>
-  </section>
+  <div class="new-page" id="new-page" data-today={today} data-per-page={PER_PAGE} data-fallback={fallback ? '1' : undefined}>
+    <section class="section-s" style="margin-top: 8px">
+      <h1>新着</h1>
+      <p class="muted">
+        {fallback
+          ? recent.length > 0 ? `直近30日の配信はありません。配信日の新しい順に${recent.length}件を出しています。` : '作品データを準備中です。'
+          : `直近30日に配信が始まった作品 ${recent.length}件`}
+        {upcoming.length > 0 && `／近日配信 ${upcoming.length}件`}
+      </p>
+    </section>
+
+    <div class="new-controls">
+      <nav class="new-tabs" aria-label="期間">
+        {!fallback && tabs.map((t) => (
+          <a class="chip" href={`/new/?d=${t.key}`} data-d={t.key} aria-current={t.key === '30' ? 'true' : undefined}>{t.label}<span class="n">{t.count}</span></a>
+        ))}
+        {upcoming.length > 0 && <a class="chip" href="/new/?d=soon" data-d="soon">近日配信<span class="n">{upcoming.length}</span></a>}
+      </nav>
+
+      {facets.map((f) => f.items.length > 0 && (
+        <div class="new-facet" data-fk={f.key}>
+          <span class="k">{f.label}</span>
+          <div class="chips">
+            {f.items.map((x, i) => (
+              <button class="chip" type="button" data-v={x.id} aria-pressed="false" hidden={i >= FACET_SHOW}>{x.name}<span class="n">{x.count}</span></button>
+            ))}
+            {f.items.length > FACET_SHOW && <button class="chip facet-more" type="button" aria-expanded="false">もっと</button>}
+          </div>
+        </div>
+      ))}
+
+      <div class="new-toggles">
+        <label class="check"><input type="checkbox" data-t="sale" />セール中のみ</label>
+        <label class="check"><input type="checkbox" data-t="rated" />評価あり</label>
+        <span class="new-count count" aria-live="polite"></span>
+        <a class="more-link" href={EXPLORE}>この条件を探索で開く →</a>
+      </div>
+    </div>
+
+    <div class="new-list" data-kind="recent">
+      {recentDays.length === 0 && <div class="empty"><p>直近の新着はまだありません。</p></div>}
+      {recentDays.map((g) => (
+        <section class="new-day" data-day={g.day}>
+          <h2 class="new-day-head">{dayHeading(g.day)}<span class="n"><span class="c">{g.items.length}</span> 件</span></h2>
+          <div class="grid">
+            {g.items.map((x, i) => (
+              <div class="new-item" {...x.attrs}><WorkCard work={x.card} eager={g === recentDays[0] && i < 4} /></div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+
+    {
+      soonDays.length > 0 && (
+        <section class="new-soon section-s" id="soon">
+          <h2 class="h-m">近日配信</h2>
+          <div class="new-list" data-kind="soon">
+            {soonDays.map((g) => (
+              <section class="new-day" data-day={g.day}>
+                <h2 class="new-day-head">{dayHeading(g.day)}<span class="n"><span class="c">{g.items.length}</span> 件</span></h2>
+                <div class="grid">
+                  {g.items.map((x) => (
+                    <div class="new-item" {...x.attrs}><WorkCard work={x.card} /></div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    <nav class="pager new-pager" aria-label="ページ送り"></nav>
+    <p style="margin-top: 16px"><a class="btn" href={EXPLORE}>この条件を探索で開く</a></p>
+  </div>
 
   <AdSlot name="new-bottom" />
 </Base>
+
+<script>
+  // 新着の絞り込み。表示の切り替えだけで、データの取得はしない
+  const root = document.getElementById('new-page');
+  if (root) {
+    const PER = Number(root.dataset.perPage) || 60;
+    const today = root.dataset.today || '';
+    const fallback = root.dataset.fallback === '1';
+    const items = [...root.querySelectorAll<HTMLElement>('.new-item')];
+    const days = [...root.querySelectorAll<HTMLElement>('.new-day')];
+    const soon = root.querySelector<HTMLElement>('.new-soon');
+    const recentList = root.querySelector<HTMLElement>('.new-list[data-kind="recent"]');
+    const pager = root.querySelector<HTMLElement>('.new-pager');
+    const count = root.querySelector<HTMLElement>('.new-count');
+    const tabs = [...root.querySelectorAll<HTMLAnchorElement>('.new-tabs a[data-d]')];
+    const facetKeys = ['g', 'm', 'a'] as const;
+    type Key = (typeof facetKeys)[number];
+    const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+
+    // 条件（URL から読む）
+    const q = new URLSearchParams(location.search);
+    const st = {
+      d: q.get('d') || (fallback ? 'all' : '30'),
+      f: { g: q.get('g') || '', m: q.get('m') || '', a: q.get('a') || '' } as Record<Key, string>,
+      sale: q.get('sale') === '1',
+      rated: q.get('rated') === '1',
+      p: Math.max(1, Number(q.get('p')) || 1),
+    };
+    if (!['1', '7', '30', 'soon', 'all'].includes(st.d)) st.d = '30';
+
+    const inPeriod = (el: HTMLElement) => {
+      const d = el.dataset.d || '';
+      if (st.d === 'soon') return d > today;
+      if (d > today) return false; // 配信前は新着に混ぜない
+      if (st.d === 'all' || fallback) return true;
+      return d >= addDays(today, -(Number(st.d) - 1));
+    };
+    const has = (el: HTMLElement, k: Key, v: string) => (el.dataset[k] || '').split(' ').includes(v);
+
+    function writeUrl() {
+      const p = new URLSearchParams();
+      if (st.d !== (fallback ? 'all' : '30')) p.set('d', st.d);
+      for (const k of facetKeys) if (st.f[k]) p.set(k, st.f[k]);
+      if (st.sale) p.set('sale', '1');
+      if (st.rated) p.set('rated', '1');
+      if (st.p > 1) p.set('p', String(st.p));
+      const s = p.toString();
+      history.replaceState(null, '', location.pathname + (s ? `?${s}` : ''));
+    }
+
+    function render() {
+      const period = items.filter(inPeriod);
+      // チップの件数と並び（その期間の新着で多い順に上位8件。選択中のものは必ず見せる）
+      for (const k of facetKeys) {
+        const box = root!.querySelector<HTMLElement>(`.new-facet[data-fk="${k}"]`);
+        if (!box) continue;
+        const wrap = box.querySelector<HTMLElement>('.chips')!;
+        const more = box.querySelector<HTMLButtonElement>('.facet-more');
+        const open = more?.getAttribute('aria-expanded') === 'true';
+        const btns = [...box.querySelectorAll<HTMLButtonElement>('button[data-v]')];
+        const n = new Map(btns.map((b) => [b, period.filter((el) => has(el, k, b.dataset.v!)).length]));
+        btns.sort((a, b) => n.get(b)! - n.get(a)!);
+        let shown = 0;
+        for (const b of btns) {
+          const on = st.f[k] === b.dataset.v;
+          b.classList.toggle('on', on);
+          b.setAttribute('aria-pressed', String(on));
+          b.querySelector('.n')!.textContent = String(n.get(b));
+          const visible = on || (n.get(b)! > 0 && (open || shown < 8));
+          if (visible && !on) shown++;
+          b.hidden = !visible;
+          wrap.insertBefore(b, more);
+        }
+        if (more) more.hidden = btns.filter((b) => n.get(b)! > 0).length <= 8;
+        box.hidden = btns.every((b) => b.hidden);
+      }
+      // 作品の絞り込み
+      const match = period.filter((el) =>
+        facetKeys.every((k) => !st.f[k] || has(el, k, st.f[k])) && (!st.sale || el.dataset.sale === '1') && (!st.rated || el.dataset.rated === '1'),
+      );
+      const pages = Math.max(1, Math.ceil(match.length / PER));
+      if (st.p > pages) st.p = pages;
+      const page = new Set(match.slice((st.p - 1) * PER, st.p * PER));
+      for (const el of items) el.hidden = !page.has(el);
+      for (const d of days) {
+        const vis = [...d.querySelectorAll<HTMLElement>('.new-item')].filter((el) => !el.hidden).length;
+        d.hidden = vis === 0;
+        const c = d.querySelector('.c');
+        if (c) c.textContent = String(vis);
+      }
+      if (soon) soon.hidden = st.d !== 'soon';
+      if (recentList) recentList.hidden = st.d === 'soon';
+      for (const t of tabs) {
+        if (t.dataset.d === st.d) t.setAttribute('aria-current', 'true');
+        else t.removeAttribute('aria-current');
+        t.classList.toggle('on', t.dataset.d === st.d);
+      }
+      for (const c of root!.querySelectorAll<HTMLInputElement>('.new-toggles input[data-t]')) c.checked = c.dataset.t === 'sale' ? st.sale : st.rated;
+      if (count) count.innerHTML = `<b>${match.length}</b>件`;
+      // ページ送り
+      if (pager) {
+        pager.replaceChildren();
+        if (pages > 1) {
+          for (let i = 1; i <= pages; i++) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn' + (i === st.p ? ' on' : '');
+            b.textContent = String(i);
+            if (i === st.p) b.setAttribute('aria-current', 'page');
+            b.addEventListener('click', () => {
+              st.p = i;
+              render();
+              writeUrl();
+              root!.scrollIntoView({ block: 'start' });
+            });
+            pager.append(b);
+          }
+        }
+      }
+    }
+
+    const update = () => { st.p = 1; render(); writeUrl(); };
+    for (const t of tabs) {
+      t.addEventListener('click', (e) => {
+        e.preventDefault();
+        st.d = t.dataset.d!;
+        update();
+      });
+    }
+    for (const k of facetKeys) {
+      const box = root.querySelector<HTMLElement>(`.new-facet[data-fk="${k}"]`);
+      box?.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
+        if (!b) return;
+        if (b.classList.contains('facet-more')) {
+          b.setAttribute('aria-expanded', String(b.getAttribute('aria-expanded') !== 'true'));
+          b.textContent = b.getAttribute('aria-expanded') === 'true' ? '閉じる' : 'もっと';
+          render();
+          return;
+        }
+        st.f[k] = st.f[k] === b.dataset.v ? '' : b.dataset.v!;
+        update();
+      });
+    }
+    for (const c of root.querySelectorAll<HTMLInputElement>('.new-toggles input[data-t]')) {
+      c.addEventListener('change', () => {
+        if (c.dataset.t === 'sale') st.sale = c.checked;
+        else st.rated = c.checked;
+        update();
+      });
+    }
+    render();
+  }
+</script>

@@ -430,3 +430,31 @@ body.show-ad-slots .ad-slot { display: flex; }
 
 /* フッターのリンク群（一覧ページ／法務） */
 .site-footer .links-group { display: grid; gap: calc(var(--sp) * 1.5); align-content: start; }
+
+/* ---- 新着（/new/）の絞り込み（第三者レビュー A I2） ---- */
+.new-controls { display: grid; gap: calc(var(--sp) * 1.5); margin-bottom: calc(var(--sp) * 3); }
+.new-tabs { display: flex; flex-wrap: wrap; gap: var(--sp); }
+.new-tabs .chip { display: inline-flex; align-items: center; min-height: 44px; min-width: 64px; justify-content: center; }
+.new-tabs .chip[aria-current] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.new-tabs .chip[aria-current] .n { color: var(--accent-ink); opacity: .75; }
+.new-facet { display: grid; grid-template-columns: 5em minmax(0, 1fr); gap: var(--sp); align-items: start; }
+.new-facet .k { color: var(--fg2); font-size: 12px; letter-spacing: .08em; padding-top: 9px; }
+.new-facet .chip { display: inline-flex; align-items: center; max-width: 100%; overflow-wrap: anywhere; }
+.new-facet .chip.on .n { color: var(--accent-ink); opacity: .75; }
+.new-facet .facet-more { color: var(--accent); }
+.new-toggles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px calc(var(--sp) * 2); }
+.new-toggles .check { min-height: 44px; }
+.new-toggles .new-count { margin-left: auto; }
+.new-day { margin: calc(var(--sp) * 4) 0; }
+.new-day-head { display: flex; align-items: baseline; gap: 10px; font-size: 17px; padding-bottom: 6px; margin-bottom: calc(var(--sp) * 2); border-bottom: 1px solid var(--line-strong); white-space: nowrap; }
+.new-day-head .n { color: var(--fg2); font: 400 12.5px/1 var(--font); font-variant-numeric: tabular-nums; }
+.new-item[hidden], .new-day[hidden], .new-facet[hidden] { display: none; }
+/* スマホはチップを 1 行の横スクロールにして、縦に長くしない */
+@media (max-width: 640px) {
+  .new-facet { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .new-facet .k { padding-top: 0; }
+  .new-facet .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 calc(var(--sp) * -2); padding: 0 calc(var(--sp) * 2); }
+  .new-facet .chip { flex: none; white-space: nowrap; }
+  .new-toggles .new-count { margin-left: 0; }
+}
+.new-facet .chip[hidden], .new-tabs .chip[hidden] { display: none; }
