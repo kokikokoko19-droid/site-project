@@ -22,6 +22,21 @@
 - 軸ページの URL `/actress/{id}/`（シリーズは `/series/{id}/`、メーカーは `/maker/{id}/`）の数字。
 - または、探索ページに表示される ID。
 
+## publish.json（掲載方針。2026-11-15 の決定「案 A」）
+
+サイトに出す作品の範囲。`derive` と `export` が読み（`--publish-config PATH` で変更）、DB の全件から公開対象だけでラベル・ランキングを計算し、出力する。DB の作品データは消さない。
+
+```json
+{ "recentMonths": 3, "minReviews": 20, "includeRanked": true, "includeFollowed": true }
+```
+
+- `recentMonths`: 配信開始日が今日（日本時間）から この か月以内の作品は全件出す。配信開始前の作品も含む。
+- `minReviews`: それより前の作品（配信開始日が無い作品を含む）は、レビュー この 件以上のものだけ出す。
+- `includeRanked`: 人気順の上位（`--ranked-pages` で順位が付いた作品）を、レビュー件数によらず出す。
+- `includeFollowed`: `follow.json` の出演者・シリーズ・メーカーの作品を、レビュー件数によらず出す（`--follow-config` で変更）。
+- 配信終了（gone）の作品はどの枠でも出さない。除外リスト（blocklist.json）はこの後に効く。
+- ファイルが無ければ上の値（既定）で動く。形式が不正なときは derive・export がエラーで止まる。
+
 ## blocklist.json（除外リスト・取り下げ対応）
 
 DMM からの取り下げ依頼などで、サイトに出さない作品・出演者を指定する。`export` が読み、該当作品を全ての出力（`works.json`、`works-NNN.json`、`meta.json` の rankings・todays、`actresses.json`）から除く。DB の作品データは消さない。
