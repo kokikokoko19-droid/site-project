@@ -97,6 +97,7 @@ let linkTotal = 0;
 let vPages = 0;
 let ctaPages = 0;
 let goPages = 0;
+let goWithId = 0; // on のとき、移動先にアフィリエイトIDがある /go/ の数
 
 for (const file of htmlFiles) {
   const html = readFileSync(file, 'utf8');
@@ -137,7 +138,8 @@ for (const file of htmlFiles) {
     goPages++;
     const dest = GO_REFRESH.exec(html)?.[1] ?? '';
     const hasId = /(?:^|[?&;/])(?:af_id|affi_id)=/.test(dest);
-    if (AFFILIATE_ON && !hasId) note(affBad, 'AFFILIATE_LINKS=on なのに /go/ の移動先にアフィリエイトID（af_id= / affi_id=）が無い', page);
+    if (hasId) goWithId++;
+    // on のときは 1 ページずつは咎めない（API が affiliateURL を返さない作品は公式 URL へ送るため）。全体の割合で判定する（下）
     if (!AFFILIATE_ON && hasId) note(affBad, 'AFFILIATE_LINKS が off なのに /go/ の移動先にアフィリエイトIDがある', page);
   }
   if (!AFFILIATE_ON && html.includes('affi_id=')) note(affBad, 'AFFILIATE_LINKS が off なのに HTML に affi_id= を含むURLがある', page);
@@ -163,7 +165,11 @@ console.log(`[check-dist] ${distDir} を検査しました（${elapsed} 秒）`)
 console.log(`  HTML ページ: ${fmt(htmlFiles.length)} 件（${bySection}）`);
 console.log(`  内部リンク: 延べ ${fmt(linkTotal)} 件、行き先 ${fmt(exists.size)} 種類`);
 console.log(`  /v/ の作品ページ: ${fmt(vPages)} 件（CTA あり ${fmt(ctaPages)} 件）`);
-console.log(`  アフィリエイト: ${AFFILIATE_ON ? 'on' : 'off'}（/go/ ${fmt(goPages)} 件を検査）`);
+console.log(`  アフィリエイト: ${AFFILIATE_ON ? 'on' : 'off'}（/go/ ${fmt(goPages)} 件を検査、ID あり ${fmt(goWithId)} 件）`);
+// on なのに ID 付きが無い、または 9 割未満なら、切替が効いていない（FANZA_SITE_AFFILIATE_ID の未設定など）とみなして失敗
+if (AFFILIATE_ON && goPages > 0 && (goWithId === 0 || goWithId / goPages < 0.9)) {
+  note(affBad, `AFFILIATE_LINKS=on なのに /go/ の移動先にアフィリエイトIDがあるのは ${fmt(goWithId)}/${fmt(goPages)} 件だけ（9 割未満）`, '/go/');
+}
 
 const sum = (map) => [...map.values()].reduce((s, e) => s + e.count, 0);
 const groups = [
