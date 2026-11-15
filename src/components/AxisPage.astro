@@ -6,11 +6,14 @@
 import Base from '../layouts/Base.astro';
 import AdSlot from './AdSlot.astro';
 import Breadcrumb from './Breadcrumb.astro';
+import Shelf from './Shelf.astro';
+import ShelfNav from './ShelfNav.astro';
 import WorkGrid from './WorkGrid.astro';
 import { loadCatalog } from '../lib/catalog.ts';
 import type { CatalogWork } from '../lib/catalog.ts';
 import { fmtDate } from '../lib/format.ts';
 import { AXIS_PER_PAGE } from '../lib/card.ts';
+import { indexOf, neighborRefs } from '../lib/shelves.ts';
 
 type Kind = 'actress' | 'series' | 'maker' | 'genre';
 
@@ -93,6 +96,10 @@ const exploreHref = `/explore/?${QUERY[kind]}=${encodeURIComponent(name)}`;
 const groups = relatedGroups();
 const baseHref = `/${kind}/${encodeURIComponent(id)}/`;
 const pageHref = (n: number) => (n <= 1 ? baseHref : `${baseHref}page/${n}/`);
+// 棚として見せる帯（1ページ目だけ。最新 10 件）と、「隣の棚へ」（出演者ページは共演の多い出演者があるので出さない）
+const SHELF_N = 10;
+const shelfWorks = page === 1 && total > 0 ? works.slice(0, SHELF_N) : [];
+const neighbors = kind === 'actress' ? [] : neighborRefs(indexOf(catalog, kind), catalog.refNames[kind], id, 4);
 const noindex = (kind === 'series' || kind === 'maker' || kind === 'actress') && total < 3;
 
 // title と description にページごとに変わる数値（作品数・平均評価・最新の配信日）を入れる（第三者レビュー C-13）
@@ -122,8 +129,16 @@ const crumbs = [
     <p class="muted">作品 <span class="nowrap">{total}本</span>（配信開始日の新しい順{pages > 1 ? `、${page} / ${pages}ページ` : ''}）{latest && <>。最新の配信日 <span class="nowrap">{latest}</span></>}</p>
   </section>
 
+  {
+    shelfWorks.length > 0 && (
+      <section class="shelf-row axis-shelf">
+        <Shelf works={shelfWorks} label={`${name}の棚`} eager={4} />
+      </section>
+    )
+  }
+
   <section class="section">
-    <WorkGrid works={shown} empty="この軸に該当する作品はまだありません。" eager={page === 1 ? 4 : 2} />
+    <WorkGrid works={shown} empty="この軸に該当する作品はまだありません。" eager={shelfWorks.length > 0 ? 0 : 2} />
     {
       pages > 1 && (
         <nav class="pager" aria-label="ページ送り">
@@ -157,6 +172,8 @@ const crumbs = [
       </section>
     )
   }
+
+  {neighbors.length > 0 && <section class="section"><ShelfNav kind={kind} items={neighbors} /></section>}
 
   <AdSlot name="axis-bottom" />
 </Base>
