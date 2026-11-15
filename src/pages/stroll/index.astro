@@ -1,0 +1,135 @@
+---
+// ぶらぶらモード（/stroll/）。目的なく棚を眺めて回るための画面（docs/08 8 章「目的なくぶらぶらする」）。
+// ビルド時に 12 本の棚（テーマ名＋表紙 10 枚）を HTML に入れる。どの棚にするかは日付からの決定的な選び方（src/lib/shelves.ts）。
+// JS があるときは 1 度に 1 本だけ見せ、「次の棚へ」ボタンと左右スワイプ（←→キー）で切り替える。JS が無いときは全部の棚が縦に並ぶ。
+// 計測: 切り替えのたびに document へ CustomEvent「stroll:change」（detail: method・from・to・kind）を出す。
+// ボタンには data-stroll（next／prev／first）、「この棚をもっと見る」には data-shelf-more が付く（public/analytics/events.js で拾う）。
+// 表紙は 160px（--cover-w）を上限に格子で並べ、引き伸ばさない。表紙の上に文字を重ねない。
+import Base from '../../layouts/Base.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+import WorkCard from '../../components/WorkCard.astro';
+import { loadCatalog } from '../../lib/catalog.ts';
+import { toCard } from '../../lib/card.ts';
+import { jstToday } from '../../lib/newlist.ts';
+import { strollShelves } from '../../lib/shelves.ts';
+import type { ShelfKind } from '../../lib/shelves.ts';
+
+const catalog = loadCatalog();
+const shelves = strollShelves(catalog, jstToday());
+const total = shelves.length;
+
+// 棚の種類の小さな札（テーマ名の上に出す）
+const KIND: Record<ShelfKind, string> = {
+  genre: 'ジャンル', actress: '出演者', series: 'シリーズ', maker: 'メーカー',
+  rated: '定番', sale: 'セール', new: '新入荷', popular: '人気', today: '今日',
+};
+const anchor = (i: number) => `s${(i % total) + 1}`;
+---
+
+<Base
+  title="ぶらぶらする"
+  description="棚を 1 本ずつ眺めて回るページです。ジャンル・出演者・シリーズ・定番・セール・新入荷の棚を日替わりで並べています。"
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  <Breadcrumb items={[{ href: '/', label: 'トップ' }, { label: 'ぶらぶらする' }]} />
+
+  <section class="stroll-intro">
+    <h1 class="h-m">ぶらぶらする</h1>
+    <p class="muted">今日の棚 {total} 本。表紙を押すと作品ページへ。</p>
+  </section>
+
+  {
+    total > 0 ? (
+      <div class="stroll" id="stroll" data-stroll-root>
+        {shelves.map((sh, i) => (
+          <section class="stroll-shelf" id={anchor(i)} data-kind={sh.kind} aria-labelledby={`${anchor(i)}-h`}>
+            <div class="stroll-head">
+              <span class="eyebrow">{KIND[sh.kind]}</span>
+              <h2 class="h-s" id={`${anchor(i)}-h`} tabindex="-1">{sh.title}<span class="n">{sh.count}件</span></h2>
+              <span class="stroll-pos" aria-hidden="true">{i + 1} / {total}</span>
+            </div>
+            <div class="stroll-grid">
+              {sh.works.map((w, k) => (
+                <WorkCard work={toCard(w)} variant="shelf" tag={sh.kind === 'sale'} sub="" eager={i === 0 && k < 6} />
+              ))}
+            </div>
+            <a class="more-link stroll-more" href={sh.href} data-shelf-more>この棚をもっと見る →</a>
+            <div class="stroll-btns">
+              <a class="btn stroll-prev" href={`#${anchor(i - 1 + total)}`} data-stroll="prev" aria-label="前の棚へ">‹</a>
+              <a class="btn" href={`#${anchor(0)}`} data-stroll="first">最初から</a>
+              <a class="btn btn-cta" href={`#${anchor(i + 1)}`} data-stroll="next">次の棚へ</a>
+            </div>
+          </section>
+        ))}
+      </div>
+    ) : (
+      <div class="empty"><p>作品データを準備中です。</p></div>
+    )
+  }
+
+  {/* 描画の前に 1 本表示へ切り替える（あとから隠すと画面がずれるため、要素の直後で同期的に実行する） */}
+  <script is:inline>
+    (function () {
+      var root = document.getElementById('stroll');
+      if (!root) return;
+      var shelves = root.querySelectorAll('.stroll-shelf');
+      var n = shelves.length;
+      var cur = 0;
+      var m = /^#s(\d+)$/.exec(location.hash);
+      if (m && +m[1] >= 1 && +m[1] <= n) cur = +m[1] - 1;
+      root.classList.add('is-one');
+      for (var i = 0; i < n; i++) shelves[i].hidden = i !== cur;
+
+      function show(to, method, focusSel) {
+        to = ((to % n) + n) % n;
+        if (to === cur) return;
+        var from = cur;
+        shelves[from].hidden = true;
+        shelves[to].hidden = false;
+        cur = to;
+        try { history.replaceState(null, '', '#s' + (to + 1)); } catch (e) {}
+        var top = root.getBoundingClientRect().top;
+        if (top < 0) window.scrollBy(0, top - 8);
+        var f = focusSel && shelves[to].querySelector(focusSel);
+        if (f) f.focus({ preventScroll: true });
+        document.dispatchEvent(new CustomEvent('stroll:change', {
+          detail: { method: method, from: from + 1, to: to + 1, kind: shelves[to].getAttribute('data-kind') || '' },
+        }));
+      }
+
+      root.addEventListener('click', function (e) {
+        var b = e.target.closest && e.target.closest('[data-stroll]');
+        if (!b) return;
+        e.preventDefault();
+        var a = b.getAttribute('data-stroll');
+        if (a === 'next') show(cur + 1, 'button', '[data-stroll="next"]');
+        else if (a === 'prev') show(cur - 1, 'button', '[data-stroll="prev"]');
+        else show(0, 'first', '[data-stroll="next"]');
+      });
+
+      // 左右スワイプ。縦の動きが大きいとき（ページのスクロール）は切り替えない
+      var sx = 0, sy = 0, tracking = false;
+      root.addEventListener('touchstart', function (e) {
+        if (e.touches.length !== 1) { tracking = false; return; }
+        tracking = true; sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+      }, { passive: true });
+      root.addEventListener('touchend', function (e) {
+        if (!tracking) return;
+        tracking = false;
+        var t = e.changedTouches[0];
+        var dx = t.clientX - sx, dy = t.clientY - sy;
+        if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+        show(dx < 0 ? cur + 1 : cur - 1, 'swipe');
+      }, { passive: true });
+
+      // ←→ キー（入力欄にいるときは使わない）
+      document.addEventListener('keydown', function (e) {
+        if (e.altKey || e.ctrlKey || e.metaKey) return;
+        var tag = (e.target && e.target.tagName) || '';
+        if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+        if (e.key === 'ArrowRight') show(cur + 1, 'key');
+        else if (e.key === 'ArrowLeft') show(cur - 1, 'key');
+      });
+    })();
+  </script>
+</Base>

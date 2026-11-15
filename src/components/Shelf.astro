@@ -35,9 +35,11 @@ interface Props {
   more?: string;
   /** 見出しの要素（既定 h2） */
   as?: 'h2' | 'h3';
+  /** 見出しの大きさ（B-5 の大中小。既定は小。トップの「今日の発見」だけ大） */
+  size?: 'l' | 's';
 }
 
-const { works, tag = false, sub = 'none', empty = '該当する作品がありません。', label, eager = 0, title, count, headLink, pop, more, as: H = 'h2' } = Astro.props;
+const { works, tag = false, sub = 'none', empty = '該当する作品がありません。', label, eager = 0, title, count, headLink, pop, more, as: H = 'h2', size = 's' } = Astro.props;
 
 const cards = works.map((w) => {
   const date = fmtDate(w.releasedAt);
@@ -51,7 +53,7 @@ const name = title ?? label ?? '作品の棚';
 {
   title && (
     <div class="section-head shelf-head">
-      <H class="h-s">{title}{typeof count === 'number' && count > 0 && <span class="n">{count}件</span>}</H>
+      <H class={`h-${size}`}>{title}{typeof count === 'number' && count > 0 && <span class="n">{count}件</span>}</H>
       {pop && <span class="pop" title={pop}>{pop}</span>}
       {headLink && <a href={headLink.href}>{headLink.label}</a>}
     </div>

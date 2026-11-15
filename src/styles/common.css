@@ -492,3 +492,45 @@ body.show-ad-slots .ad-slot { display: flex; }
 /* 棚の末尾の終端カード（「この棚をもっと見る →」など）。表紙と同じ比率の点線の枠 */
 .shelf-end { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; aspect-ratio: 3 / 4; padding: var(--sp); border: 1px dashed var(--line-strong); border-radius: 3px; color: var(--accent); font-size: 13px; line-height: 1.5; text-align: center; }
 .shelf-end:hover { border-color: var(--accent); background: var(--accent-soft); }
+/* ぶらぶらモードの入口（トップの入口チップの先頭と、棚が始まる前のボタン） */
+.entry-chips a.strong { color: var(--accent); border-color: var(--accent); }
+.stroll-door { margin: calc(var(--sp) * 3) 0 0; }
+.stroll-door .btn { width: 100%; justify-content: space-between; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.stroll-door .btn span { color: var(--fg1); font-weight: 400; font-size: var(--fs-s); }
+@media (min-width: 640px) { .stroll-door .btn { width: auto; } }
+
+/* ぶらぶらモード（/stroll/）。1 本の棚を大きく出す。JS が無いときは全部の棚が縦に並ぶ */
+.stroll-intro { margin-top: var(--sp); }
+.stroll-intro p { margin-top: 4px; font-size: var(--fs-s); }
+.stroll { display: grid; gap: 40px; margin-top: calc(var(--sp) * 2); }
+.stroll-shelf[hidden] { display: none; }
+.stroll-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px var(--sp); margin-bottom: calc(var(--sp) * 1.5); }
+.stroll-head .eyebrow { grid-column: 1 / -1; }
+.stroll-head h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; outline: none; }
+.stroll-pos { color: var(--fg2); font-size: var(--fs-s); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* 表紙の格子。スマホは 3 列（10 枚目は出さず 3 段にそろえる）、640px 以上は 5 列 × 2 段。1 枚は --cover-w を超えない */
+.stroll-grid { display: grid; grid-template-columns: repeat(3, minmax(0, var(--cover-w))); gap: calc(var(--sp) * 2) calc(var(--sp) * 1.5); justify-content: start; padding-bottom: 14px; }
+.stroll-grid > .card:nth-child(n + 10) { display: none; }
+.stroll-grid .card { gap: 6px; }
+.stroll-grid .card-title { font-size: 12.5px; min-height: calc(2 * 1.45em); }
+@media (min-width: 640px) {
+  .stroll-grid { grid-template-columns: repeat(5, minmax(0, var(--cover-w))); }
+  .stroll-grid > .card:nth-child(n + 10) { display: grid; }
+}
+/* 棚の板（下線）は .shelf-wrap と同じ見せ方 */
+.stroll-grid::after { content: ""; grid-column: 1 / -1; display: block; height: 4px; margin-top: -2px; border-radius: 2px; background: linear-gradient(to bottom, var(--line-strong), var(--line)); box-shadow: 0 8px 14px -6px rgba(0,0,0,.9); }
+/* 棚の下: 左に「この棚をもっと見る」、右にボタン。ボタンは棚（section）の直下に置き、スマホでは下端に留める */
+.stroll-shelf { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: calc(var(--sp) * 2); }
+.stroll-head, .stroll-grid { grid-column: 1 / -1; }
+.stroll-more { justify-self: start; margin-top: calc(var(--sp) * 1.5); }
+.stroll-btns { display: flex; gap: var(--sp); margin-top: calc(var(--sp) * 1.5); }
+.stroll-btns .btn { min-height: 48px; white-space: nowrap; }
+.stroll-btns .btn-cta { min-width: 128px; }
+.stroll-prev { min-width: 48px; padding: 0; font-size: 20px; }
+/* スマホは「次の棚へ」を画面の下端に留め、親指の届く位置に置く（棚の終わりで元の位置に戻る） */
+@media (max-width: 639px) {
+  .stroll-intro p { display: none; }
+  .stroll-more { grid-column: 1 / -1; margin-top: var(--sp); }
+  .stroll-btns { grid-column: 1 / -1; position: sticky; bottom: 0; z-index: 5; margin: 0 calc(var(--sp) * -2); padding: var(--sp) calc(var(--sp) * 2) calc(var(--sp) + env(safe-area-inset-bottom)); background: rgba(20, 17, 16, .92); border-top: 1px solid var(--line); }
+  .stroll-btns .btn-cta { flex: 1 1 auto; }
+}

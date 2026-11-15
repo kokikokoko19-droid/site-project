@@ -6,6 +6,7 @@
  * 文言はテーマ名（API の名前）と件数だけで、紹介文は付けない。
  */
 import type { Catalog, CatalogWork } from './catalog.ts';
+import { splitNew } from './newlist.ts';
 
 export type AxisKind = 'actress' | 'series' | 'maker' | 'genre';
 export type ShelfKind = AxisKind | 'today' | 'new' | 'popular' | 'sale' | 'rated';
@@ -118,7 +119,7 @@ export function strollShelves(catalog: Catalog, day: string, per = STROLL_PER): 
   const fixed: Record<'rated' | 'sale' | 'new', ShelfDef | null> = {
     rated: rated.length >= MIN ? { key: 'rated', kind: 'rated', title: '高評価の定番', count: rated.length, href: '/ranking/', works: dailyWorks(rated, per, day, 'rated') } : null,
     sale: sale.length >= MIN ? { key: 'sale', kind: 'sale', title: 'セール', count: sale.length, href: '/sale/', works: dailyWorks(sale, per, day, 'sale') } : null,
-    new: catalog.works.length >= MIN ? { key: 'new', kind: 'new', title: '新入荷', count: catalog.recent(per).length, href: '/new/', works: catalog.recent(per) } : null,
+    new: catalog.works.length >= MIN ? { key: 'new', kind: 'new', title: '新入荷', count: splitNew(catalog.recent(), day).recent.length, href: '/new/', works: catalog.recent(per) } : null,
   };
   // 並びの型。g: ジャンル、a: 出演者、s: シリーズ。足りない枠は後ろのジャンルで埋める
   const pattern = ['new', 'g', 'a', 's', 'g', 'rated', 'a', 'g', 'sale', 's', 'a', 'g'] as const;
