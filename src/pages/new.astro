@@ -1,5 +1,5 @@
 ---
-// 新着（/new/）。直近30日の配信と、近日配信（配信日が今日より後）を、配信日の見出しで区切って並べる。
+// 新着（/new/）。直近7日の配信と、近日配信（配信日が今日より後）を、配信日の見出しで区切って並べる。30日分は探索ページへ送る。
 // 絞り込みは静的HTML＋小さなJS: 各作品に data-g（ジャンルID）・data-m・data-a・data-d（配信日）・data-sale・data-rated を持たせ、
 // 期間タブ・チップ・トグルで表示を切り替える。探索の JSON は読まない。条件は URL に残す（/new/?d=7&g=123）。
 // JS が無いときは操作部を隠し、全件を日付見出し付きで見せる。近日配信は「近日配信」タブ（JS 無しでは末尾の節）だけに出す。
@@ -10,19 +10,19 @@ import WorkCard from '../components/WorkCard.astro';
 import { loadCatalog } from '../lib/catalog.ts';
 import type { CatalogWork } from '../lib/catalog.ts';
 import { toCard } from '../lib/card.ts';
-import { NEW_PERIODS, addDays, dayHeading, facetCounts, groupByDay, jstToday, releaseDay, splitNew } from '../lib/newlist.ts';
+import { NEW_PAGE_DAYS, NEW_PERIODS, addDays, dayHeading, facetCounts, groupByDay, jstToday, releaseDay, splitNew } from '../lib/newlist.ts';
 
 /** 1ページの件数（JS のページ送り） */
 const PER_PAGE = 60;
 /** チップに最初から見せる件数（残りは「もっと」で開く）と、HTMLに持たせる上限 */
 const FACET_SHOW = 8;
 const FACET_MAX = 40;
-/** 直近30日に1件も無いとき（データの取り込みが止まっているときなど）に代わりに出す件数 */
+/** 直近7日に1件も無いとき（データの取り込みが止まっているときなど）に代わりに出す件数 */
 const FALLBACK = 60;
 
 const catalog = loadCatalog();
 const today = jstToday();
-const split = splitNew(catalog.recent(), today);
+const split = splitNew(catalog.recent(), today, NEW_PAGE_DAYS);
 const fallback = split.recent.length === 0;
 const recent = fallback ? catalog.recent().filter((w) => releaseDay(w) !== '' && releaseDay(w) <= today).slice(0, FALLBACK) : split.recent;
 const upcoming = split.upcoming;
@@ -30,7 +30,7 @@ const upcoming = split.upcoming;
 // 期間タブの件数（今日を含めて n 日）
 const tabs = NEW_PERIODS.map((p) => ({ ...p, count: recent.filter((w) => releaseDay(w) >= addDays(today, -(p.days - 1))).length }));
 
-// チップ（ジャンル・メーカー・出演者）。HTMLには直近30日の新着と近日配信で多い順に FACET_MAX 件まで持たせ、
+// チップ（ジャンル・メーカー・出演者）。HTMLには直近7日の新着と近日配信で多い順に FACET_MAX 件まで持たせ、
 // 期間を変えたときの並べ直しと件数は JS が行う
 const facets = [
   { key: 'g', label: 'ジャンル', items: facetCounts([...recent, ...upcoming], (w) => w.genres) },
@@ -72,8 +72,8 @@ const EXPLORE = '/explore/?sort=new';
       <h1>新着</h1>
       <p class="muted">
         {fallback
-          ? recent.length > 0 ? `直近30日の配信はありません。配信日の新しい順に${recent.length}件を出しています。` : '作品データを準備中です。'
-          : `直近30日に配信が始まった作品 ${recent.length}件`}
+          ? recent.length > 0 ? `直近7日の配信はありません。配信日の新しい順に${recent.length}件を出しています。` : '作品データを準備中です。'
+          : `直近7日に配信が始まった作品 ${recent.length}件`}
         {upcoming.length > 0 && `／近日配信 ${upcoming.length}件`}
       </p>
     </section>
@@ -81,9 +81,10 @@ const EXPLORE = '/explore/?sort=new';
     <div class="new-controls">
       <nav class="new-tabs" aria-label="期間">
         {!fallback && tabs.map((t) => (
-          <a class="chip" href={`/new/?d=${t.key}`} data-d={t.key} aria-current={t.key === '30' ? 'true' : undefined}>{t.label}<span class="n">{t.count}</span></a>
+          <a class="chip" href={`/new/?d=${t.key}`} data-d={t.key} aria-current={t.key === '7' ? 'true' : undefined}>{t.label}<span class="n">{t.count}</span></a>
         ))}
         {upcoming.length > 0 && <a class="chip" href="/new/?d=soon" data-d="soon">近日配信<span class="n">{upcoming.length}</span></a>}
+        {!fallback && <a class="chip" href="/explore/?sort=new&days=30">30日分は探索で →</a>}
       </nav>
 
       {facets.map((f) => f.items.length > 0 && (
@@ -168,13 +169,13 @@ const EXPLORE = '/explore/?sort=new';
     // 条件（URL から読む）
     const q = new URLSearchParams(location.search);
     const st = {
-      d: q.get('d') || (fallback ? 'all' : '30'),
+      d: q.get('d') || (fallback ? 'all' : '7'),
       f: { g: q.get('g') || '', m: q.get('m') || '', a: q.get('a') || '' } as Record<Key, string>,
       sale: q.get('sale') === '1',
       rated: q.get('rated') === '1',
       p: Math.max(1, Number(q.get('p')) || 1),
     };
-    if (!['1', '7', '30', 'soon', 'all'].includes(st.d)) st.d = '30';
+    if (!['1', '7', 'soon', 'all'].includes(st.d)) st.d = '7';
 
     const inPeriod = (el: HTMLElement) => {
       const d = el.dataset.d || '';
@@ -187,7 +188,7 @@ const EXPLORE = '/explore/?sort=new';
 
     function writeUrl() {
       const p = new URLSearchParams();
-      if (st.d !== (fallback ? 'all' : '30')) p.set('d', st.d);
+      if (st.d !== (fallback ? 'all' : '7')) p.set('d', st.d);
       for (const k of facetKeys) if (st.f[k]) p.set(k, st.f[k]);
       if (st.sale) p.set('sale', '1');
       if (st.rated) p.set('rated', '1');

@@ -8,9 +8,11 @@ import type { CatalogWork } from './catalog.ts';
 export const NEW_PERIODS = [
   { key: '1', label: '今日', days: 1 },
   { key: '7', label: '7日', days: 7 },
-  { key: '30', label: '30日', days: 30 },
 ] as const;
+/** splitNew の既定（関数の既定値。ページ側は NEW_PAGE_DAYS を渡す） */
 export const NEW_MAX_DAYS = 30;
+/** 新着ページの HTML に入れる日数。実データは 1 日 100 件前後あるため、30 日分を 1 枚に入れると数 MB になる。30 日分は探索（?sort=new&days=30）へ送る */
+export const NEW_PAGE_DAYS = 7;
 
 /** 日本時間の今日（YYYY-MM-DD） */
 export function jstToday(now: Date = new Date()): string {

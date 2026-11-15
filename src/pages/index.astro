@@ -7,6 +7,7 @@ import AdSlot from '../components/AdSlot.astro';
 import { getCollection } from 'astro:content';
 import ArticleCard from '../components/ArticleCard.astro';
 import FeatureCarousel from '../components/FeatureCarousel.astro';
+import OperatorNote from '../components/OperatorNote.astro';
 import Shelf from '../components/Shelf.astro';
 import WorkCard from '../components/WorkCard.astro';
 import featuredConfig from '../../config/featured.json';
@@ -102,12 +103,11 @@ const guidePlaceholders = [
 
   <section class="section-s">
     <div class="letter">
-      <div>
-        <div class="from">運営者から</div>
-        <!-- TODO: 運営者が記入（今週見たもの、気づいたこと、サイトの使い方を数行で） -->
-        <p>（ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。自動生成ではなく、人の声が最初に目に入るようにします。）</p>
-        <div class="date">{letterDate && <>{letterDate}　</>}AVめぐり 編集</div>
-      </div>
+      {/* 最新の note（src/content/notes/）を出す。無い間は仮文。週次の自動生成は scripts/draft-weekly.ts（docs/07 10 章） */}
+      <OperatorNote
+        fallback="（ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。自動生成ではなく、人の声が最初に目に入るようにします。）"
+        fallbackDate={letterDate || undefined}
+      />
     </div>
   </section>
 
