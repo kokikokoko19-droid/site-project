@@ -1,0 +1,22 @@
+---
+// /maker/{id}/page/{n}/（2ページ目以降）。1ページ目は /maker/{id}/。中身は AxisPage。
+import AxisPage from '../../../../components/AxisPage.astro';
+import { loadCatalog } from '../../../../lib/catalog.ts';
+import { AXIS_PER_PAGE } from '../../../../lib/card.ts';
+
+export function getStaticPaths() {
+  const catalog = loadCatalog();
+  return [...catalog.byMaker].flatMap(([id, works]) => {
+    const pages = Math.ceil(works.length / AXIS_PER_PAGE);
+    return Array.from({ length: Math.max(0, pages - 1) }, (_, k) => ({
+      params: { id, n: String(k + 2) },
+      props: { name: catalog.refNames.maker.get(id) ?? id, works, page: k + 2 },
+    }));
+  });
+}
+
+const { id } = Astro.params as { id: string };
+const { name, works, page } = Astro.props;
+---
+
+<AxisPage kind="maker" id={id} name={name} works={works} page={page} />

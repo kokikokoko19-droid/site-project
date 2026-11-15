@@ -65,3 +65,6 @@ export function toCard(w: CatalogWork, opts: { omitLabels?: DerivedLabel[] } = {
       : null,
   };
 }
+
+/** 軸ページ（ジャンル・メーカー・シリーズ）の1ページの作品数。2ページ目以降は /{軸}/{id}/page/{n}/ */
+export const AXIS_PER_PAGE = 60;
