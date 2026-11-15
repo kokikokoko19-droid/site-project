@@ -189,7 +189,7 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
       </div>
     </header>
     <div class="pr-band">
-      <div class="wrap"><b>PR</b>本サイトはFANZAアフィリエイトプログラムを利用しており、作品リンクはPRです。</div>
+      <div class="wrap"><b>PR</b><span class="pr-long">本サイトはアフィリエイト広告（PR）を含みます。作品リンクは FANZA のアフィリエイトです</span><span class="pr-short">アフィリエイト広告を含みます</span></div>
     </div>
 
     <main class="wrap" id="main"><slot /></main>
@@ -199,7 +199,7 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
         <div class="cols">
           <div>
             <div class="brand"><Mark />{SITE_NAME}</div>
-            <p>{SITE_TAGLINE}。画像と動画は公式配信の直リンクで、転載も加工もしていません。18歳未満の方の閲覧はお断りします。</p>
+            <p>{SITE_TAGLINE}。画像と動画は公式の配信元から直接表示しています（権利は各権利者に帰属します）。18歳未満の方の閲覧はお断りします。</p>
             <p>データ更新: {updated ? <time datetime={updated.iso}>{updated.text}</time> : '準備中'}</p>
             {/* クレジット表記は DMM Web サービスの規定どおり（docs/10）。文言とリンク先は改変しない */}
             <p class="credit">Powered by <a href="https://affiliate.dmm.com/api/">FANZA Webサービス</a></p>
