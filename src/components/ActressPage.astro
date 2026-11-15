@@ -1,11 +1,16 @@
 ---
-// 出演者ページ本体（検索の入口）。プロフィール表、おすすめ10選（ベイズ平均）、新着、セール中、シリーズ別、共演、全作品、まとめ。
+// 出演者ページ本体（検索の入口）。最新作と新着、おすすめ10選（ベイズ平均）、セール中、シリーズ別、共演、全作品、まとめ。
+// 作品数で段階を分ける（第三者レビュー A I5・C-3）:
+//   10本以上: 題名「〇〇のおすすめ作品ランキング{年}」／それ未満: 「〇〇の出演作品一覧（n本）」
+//   5本未満: 10選と最新作の棚を出さず「全作品」だけ／3本未満: noindex（sitemap からも外す。astro.config.mjs）
 // 文言は自動文だけ。公式の紹介文・レビュー本文・顔写真は使わない。
 import '../styles/actress.css';
 import Base from '../layouts/Base.astro';
 import AdSlot from './AdSlot.astro';
+import Breadcrumb from './Breadcrumb.astro';
+import CtaButton from './CtaButton.astro';
+import Shelf from './Shelf.astro';
 import WorkGrid from './WorkGrid.astro';
-import WorkCard from './WorkCard.astro';
 import SampleMovie from './SampleMovie.astro';
 import ProfileTable from './ProfileTable.astro';
 import Toc from './Toc.astro';
@@ -13,7 +18,8 @@ import { loadCatalog } from '../lib/catalog.ts';
 import type { CatalogWork } from '../lib/catalog.ts';
 import { actressStats, globalMeanAvg, workBayes } from '../lib/actress-stats.ts';
 import { actressIntro, actressSummary } from '../lib/autotext-actress.ts';
-import { toCard } from '../lib/card.ts';
+import { cardLabels } from '../lib/card.ts';
+import { fmtDate } from '../lib/format.ts';
 
 interface Props {
   id: string;
@@ -27,30 +33,43 @@ const profile = catalog.actressProfiles.get(id) ?? null;
 const stats = actressStats(catalog).get(id)!;
 
 const MAX_ALL = 60;
+const RANKING_MIN = 10; // これ以上で「ランキング」の題名
+const TOP_MIN = 5; // これ以上で10選と最新作の棚を出す
+const INDEX_MIN = 3; // これ未満は noindex
+const total = works.length;
 const year = new Date().getFullYear();
 const intro = actressIntro(profile, stats);
 const summary = actressSummary(profile, stats);
 
 const meanAvg = globalMeanAvg(catalog);
 // おすすめ10選: ベイズ平均の降順。同点は新しい順（works は配信開始日の降順なので安定ソートで保たれる）
-const top = works
-  .map((w) => ({ w, score: workBayes(w, meanAvg) }))
-  .sort((a, b) => b.score - a.score)
-  .slice(0, 10);
-const movieIds = new Set(top.filter((t) => t.w.sampleMovie).slice(0, 3).map((t) => t.w.contentId));
-const latest = works.slice(0, 5);
+const top = total >= TOP_MIN
+  ? works.map((w) => ({ w, score: workBayes(w, meanAvg) })).sort((a, b) => b.score - a.score).slice(0, 10)
+  : [];
+const big = top.slice(0, 3);
+const small = top.slice(3);
+const latest = total >= TOP_MIN ? works[0] : undefined;
+const recent = total >= TOP_MIN ? works.slice(1, 4) : [];
 const sale = works.filter((w) => w.derivedLabels.includes('セール中')).slice(0, 8);
 const seriesTop = stats.series.slice(0, 5);
 const coStars = stats.coStars.slice(0, 8);
 const shown = works.slice(0, MAX_ALL);
 
-// WorkGrid と同じ対応（lib/card.ts の toCard）で、カードの表示形にする
-const card = toCard;
+const rated = (w: CatalogWork) => w.reviewAvg !== null && w.reviewCount > 0;
+/** 選定理由（データだけで作る短い文） */
+const reason = (w: CatalogWork): string => {
+  const parts: string[] = [];
+  if (rated(w)) parts.push(w.reviewCount >= 5 ? `評価 ${w.reviewAvg!.toFixed(2)}（レビュー${w.reviewCount}件）` : `評価 ${w.reviewAvg!.toFixed(2)}（レビュー${w.reviewCount}件・参考）`);
+  else parts.push('レビューはまだありません');
+  const ls = cardLabels(w.derivedLabels).filter((l) => l !== 'セール中');
+  if (ls.length > 0) parts.push(ls.join('・'));
+  return parts.join('　');
+};
 
 const toc = [
+  ...(latest ? [{ id: 'new', label: '最新作と新着' }] : []),
   { id: 'profile', label: 'プロフィール' },
-  { id: 'top10', label: 'おすすめ作品10選' },
-  { id: 'new', label: '新着' },
+  ...(top.length > 0 ? [{ id: 'top10', label: `おすすめ作品${top.length}選` }] : []),
   ...(sale.length > 0 ? [{ id: 'sale', label: 'セール中' }] : []),
   ...(seriesTop.length > 0 ? [{ id: 'series', label: 'シリーズ別' }] : []),
   ...(coStars.length > 0 ? [{ id: 'costars', label: '共演の多い出演者' }] : []),
@@ -58,37 +77,59 @@ const toc = [
   { id: 'summary', label: 'まとめ' },
 ];
 
-const pageTitle = `${name}のおすすめ作品ランキング${year}`;
+const ranking = total >= RANKING_MIN;
+const pageTitle = ranking ? `${name}のおすすめ作品ランキング${year}` : `${name}の出演作品一覧（${total}本）`;
+const heading = ranking ? `${name}のおすすめ作品ランキング` : `${name}の出演作品一覧`;
 const base = Astro.site ?? Astro.url;
 const abs = (path: string) => new URL(path, base).toString();
 const jsonLd = {
   '@context': 'https://schema.org',
   '@graph': [
     { '@type': 'Person', name, url: abs(`/actress/${id}/`) },
-    {
-      '@type': 'ItemList',
-      name: `${name}のおすすめ作品10選`,
-      itemListElement: top.map((t, i) => ({ '@type': 'ListItem', position: i + 1, url: abs(`/v/${t.w.contentId}/`) })),
-    },
+    ...(top.length > 0
+      ? [{
+          '@type': 'ItemList',
+          name: `${name}のおすすめ作品${top.length}選`,
+          itemListElement: top.map((t, i) => ({ '@type': 'ListItem', position: i + 1, url: abs(`/v/${t.w.contentId}/`) })),
+        }]
+      : []),
   ],
 };
 const jsonLdText = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
 const exploreHref = `/explore/?act=${encodeURIComponent(name)}`;
-const score = (n: number) => n.toFixed(2);
 ---
 
-<Base title={pageTitle} description={intro.slice(0, 120)} ogType="article" dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}>
+<Base title={pageTitle} description={intro.slice(0, 120)} ogType="article" noindex={total < INDEX_MIN} dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}>
   <script slot="head" type="application/ld+json" set:html={jsonLdText} />
 
-  <nav class="crumb" aria-label="パンくず">
-    <a href="/">トップ</a><span aria-hidden="true"> / </span><a href="/explore/">探索</a><span aria-hidden="true"> / </span><span aria-current="page">出演者: {name}</span>
-  </nav>
+  <Breadcrumb items={[{ href: '/', label: 'トップ' }, { href: '/actress/', label: '出演者一覧' }, { label: name }]} />
 
   <article class="actress-page">
-    <header class="section" style="margin-top: 16px">
-      <h1>{name}のおすすめ作品ランキング</h1>
-      <p class="lead">{intro}</p>
+    <header class="section" style="margin-top: 8px">
+      <h1>{heading}{!ranking && <span class="h1-count">（{total}本）</span>}</h1>
+      <p class="auto-lead">{intro}</p>
     </header>
+
+    {
+      latest && (
+        <section class="section" id="new">
+          <div class="section-head"><h2>最新作</h2></div>
+          <a class="latest-row" href={`/v/${latest.contentId}/`}>
+            <div class="thumb">{latest.imageSmall && <img src={latest.imageSmall} alt="" width="147" height="200" decoding="async" />}</div>
+            <div class="latest-body">
+              <span class="latest-title">{latest.title}</span>
+              {fmtDate(latest.releasedAt) && <span class="dim">{fmtDate(latest.releasedAt)} 配信</span>}
+            </div>
+          </a>
+          {recent.length > 0 && (
+            <>
+              <div class="section-head" style="margin-top: 24px"><h2>新着</h2><a class="more" href="#all">全作品へ</a></div>
+              <Shelf works={recent} sub="date" label="新着の作品" />
+            </>
+          )}
+        </section>
+      )
+    }
 
     <Toc items={toc} />
 
@@ -97,45 +138,55 @@ const score = (n: number) => n.toFixed(2);
       <ProfileTable profile={profile} />
     </section>
 
-    <section class="section" id="top10">
-      <div class="section-head"><h2>おすすめ作品10選</h2></div>
-      <p class="muted">レビューの平均を、件数の少なさを補正して並べています（ベイズ平均）。</p>
-      <ol class="rank-list">
-        {top.map((t, i) => (
-          <li class="rank-item">
-            <div class="rank-head">
-              <span class="rank-no" role="img" aria-label={`${i + 1}位`}>{i + 1}</span>
-              <p class="rank-stat">
-                {t.w.reviewAvg !== null && t.w.reviewCount > 0
-                  ? `評価 ${score(t.w.reviewAvg)}（レビュー${t.w.reviewCount}件）`
-                  : 'レビューはまだありません'}
-              </p>
-            </div>
-            <WorkCard work={card(t.w)} />
-            {t.w.derivedLabels.length > 0 && (
-              <p class="rank-labels muted">ラベル: {t.w.derivedLabels.join('、')}</p>
-            )}
-            <div class="rank-actions">
-              <a class="btn" href={`/v/${t.w.contentId}/`}>作品ページを見る</a>
-              {t.w.outboundUrl && (
-                <a class="btn btn-cta" href={`/go/${t.w.contentId}/`} rel="sponsored nofollow" data-cta="work">FANZAで見る <small>PR</small></a>
-              )}
-            </div>
-            {movieIds.has(t.w.contentId) && <SampleMovie movie={t.w.sampleMovie} title={t.w.title} />}
-          </li>
-        ))}
-      </ol>
-    </section>
-
-    <section class="section" id="new">
-      <div class="section-head"><h2>新着</h2></div>
-      <WorkGrid works={latest} />
-    </section>
+    {
+      top.length > 0 && (
+        <section class="section" id="top10">
+          <div class="section-head"><h2>おすすめ作品{top.length}選</h2></div>
+          <p class="muted">レビューの平均を、件数の少なさを補正して並べています（ベイズ平均）。</p>
+          <ol class="rank-list">
+            {big.map((t, i) => (
+              <li class="rank-item">
+                <a class="rank-cover thumb" href={`/v/${t.w.contentId}/`} tabindex="-1" aria-hidden="true">
+                  {t.w.imageSmall && <img src={t.w.imageSmall} alt="" width="147" height="200" loading="lazy" decoding="async" />}
+                </a>
+                <div class="rank-body">
+                  <div class="rank-head">
+                    <span class="rank-no" role="img" aria-label={`${i + 1}位`}>{i + 1}</span>
+                    <a class="rank-title" href={`/v/${t.w.contentId}/`}>{t.w.title}</a>
+                  </div>
+                  <p class="rank-stat">{reason(t.w)}</p>
+                  {t.w.outboundUrl && (
+                    <div class="rank-actions"><CtaButton id={t.w.contentId} block={false} /></div>
+                  )}
+                </div>
+                {i === 0 && t.w.sampleMovie && <div class="rank-movie"><SampleMovie movie={t.w.sampleMovie} title={t.w.title} /></div>}
+              </li>
+            ))}
+          </ol>
+          {small.length > 0 && (
+            <ol class="rank-lines" start="4">
+              {small.map((t, i) => (
+                <li>
+                  <a href={`/v/${t.w.contentId}/`}>
+                    <span class="rank-no" role="img" aria-label={`${i + 4}位`}>{i + 4}</span>
+                    <span class="thumb">{t.w.imageSmall && <img src={t.w.imageSmall} alt="" width="147" height="200" loading="lazy" decoding="async" />}</span>
+                    <span class="line-body">
+                      <span class="line-title">{t.w.title}</span>
+                      <span class="line-stat">{reason(t.w)}</span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )
+    }
 
     {sale.length > 0 && (
       <section class="section" id="sale">
         <div class="section-head"><h2>セール中</h2></div>
-        <WorkGrid works={sale} />
+        <WorkGrid works={sale} omitLabels={['セール中']} eager={0} />
       </section>
     )}
 
@@ -158,11 +209,10 @@ const score = (n: number) => n.toFixed(2);
     )}
 
     <section class="section" id="all">
-      <div class="section-head"><h2>全作品</h2></div>
-      <p class="muted">全{works.length}件（配信開始日の新しい順）</p>
-      <WorkGrid works={shown} />
-      {works.length > MAX_ALL && (
-        <p style="margin-top: 16px"><a class="btn" href={exploreHref}>探索ページで全件を見る（{works.length}件）</a></p>
+      <div class="section-head"><h2>全作品</h2><span class="sub nowrap">全{total}本（配信開始日の新しい順）</span></div>
+      <WorkGrid works={shown} eager={latest ? 0 : 4} />
+      {total > MAX_ALL && (
+        <p style="margin-top: 16px"><a class="btn" href={exploreHref}>探索ページで全件を見る（{total}件）</a></p>
       )}
     </section>
 

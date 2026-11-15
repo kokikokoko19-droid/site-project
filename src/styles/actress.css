@@ -5,18 +5,41 @@
 .toc a { display: inline-block; min-height: 32px; line-height: 32px; }
 .toc a:hover { color: var(--accent); }
 .actress-page .section > [id], .actress-page section[id] { scroll-margin-top: 72px; }
-.actress-page h1 { font-size: clamp(24px, 3.4vw, 32px); }
+.actress-page h1 { font-size: clamp(24px, 3.4vw, 32px); font-family: var(--font-title); word-break: auto-phrase; }
+.actress-page .h1-count { white-space: nowrap; }
+/* 自動文は明朝や引用符を使わず、普通の段落にする（第三者レビュー B-6） */
+.auto-lead { margin-top: calc(var(--sp) * 1.5); font: 400 15px/1.85 var(--font); color: var(--fg1); max-width: 44em; }
 .actress-page .section-head h2 { padding-bottom: 6px; border-bottom: 1px solid var(--line-strong); flex: 1; }
 .profile-table { display: grid; grid-template-columns: 6em minmax(0, 1fr); gap: 0 calc(var(--sp) * 2); margin: 0; font-size: 13.5px; max-width: 560px; }
 .profile-table dt { color: var(--fg2); font-size: 12px; letter-spacing: .08em; padding: 7px 0; border-bottom: 1px dotted var(--line); }
 .profile-table dd { margin: 0; padding: 7px 0; border-bottom: 1px dotted var(--line); overflow-wrap: anywhere; min-width: 0; }
-.rank-list { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(var(--sp) * 5) calc(var(--sp) * 4); grid-template-columns: minmax(0, 1fr); }
-@media (min-width: 640px) { .rank-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.rank-item { display: grid; gap: var(--sp); align-content: start; min-width: 0; padding-top: calc(var(--sp) * 1.5); border-top: 1px solid var(--line-strong); }
-.rank-head { display: flex; align-items: baseline; gap: 14px; }
-.rank-stat, .rank-labels { margin: 0; }
-.rank-stat { color: var(--fg1); font-size: 13px; }
+/* 最新作（1件の横長行） */
+.latest-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: calc(var(--sp) * 2); align-items: center; max-width: 560px; }
+.latest-row .thumb { width: 96px; }
+.latest-body { display: grid; gap: 4px; min-width: 0; }
+.latest-title { font-weight: 600; overflow-wrap: anywhere; }
+.latest-row:hover .latest-title { color: var(--accent); }
+/* おすすめ10選の上位3件: 左に表紙（--cover-w-lg）、右に順位・題名・理由（第三者レビュー B-1） */
+.rank-list { list-style: none; margin: 0; padding: 0; display: grid; gap: calc(var(--sp) * 3); }
+.rank-item { display: grid; grid-template-columns: var(--cover-w-lg) minmax(0, 1fr); gap: calc(var(--sp) * 1.5) calc(var(--sp) * 2.5); align-items: start; min-width: 0; padding-top: calc(var(--sp) * 2); border-top: 1px solid var(--line-strong); }
+@media (max-width: 479px) { .rank-item { grid-template-columns: 112px minmax(0, 1fr); } }
+.rank-cover { display: block; }
+.rank-body { display: grid; gap: var(--sp); min-width: 0; align-content: start; }
+.rank-head { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.rank-title { font: 700 16px/1.45 var(--font-title); overflow-wrap: anywhere; min-width: 0; }
+.rank-title:hover { color: var(--accent); }
+.rank-movie { grid-column: 1 / -1; }
+.rank-stat { margin: 0; color: var(--fg1); font-size: 13px; }
 .rank-actions { display: flex; flex-wrap: wrap; gap: var(--sp); }
+/* 4〜10位は1行（小さい表紙・順位・題名・★と件数・理由） */
+.rank-lines { list-style: none; margin: calc(var(--sp) * 3) 0 0; padding: 0; border-top: 1px solid var(--line-strong); }
+.rank-lines a { display: grid; grid-template-columns: 2.2em 56px minmax(0, 1fr); gap: calc(var(--sp) * 1.5); align-items: center; min-height: 44px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.rank-lines .rank-no { font-size: 24px; min-width: 0; }
+.rank-lines .thumb { width: 56px; }
+.line-body { display: grid; gap: 2px; min-width: 0; }
+.line-title { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.line-stat { color: var(--fg2); font-size: 12px; }
+.rank-lines a:hover .line-title { color: var(--accent); }
 .rank-table { width: 100%; border-collapse: collapse; }
 .rank-table th, .rank-table td { padding: 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
 .rank-table th { font: 700 13px var(--font-display); color: var(--fg1); border-bottom-color: var(--line-strong); }
@@ -28,3 +51,5 @@
   .rank-table td { border: 0; padding: 2px 8px; overflow-wrap: anywhere; }
   .rank-table td::before { content: attr(data-label) "："; color: var(--fg2); }
 }
+/* 件数・順位などの数値は折り返さない（第三者レビュー B-9） */
+.rank-table th, .rank-table td[data-label="順位"], .rank-table td[data-label="作品数"], .rank-table td[data-label="平均評価"], .rank-table td[data-label="レビュー総数"] { white-space: nowrap; }
