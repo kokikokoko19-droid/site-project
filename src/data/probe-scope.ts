@@ -34,8 +34,9 @@ export function tally(works: Work[], stat: MonthStat): void {
 }
 
 /** 絞り込み方針ごとの件数。recentMonths か月は全件、それより前はレビュー minReviews 件以上 */
-export function policyCount(stats: MonthStat[], recentMonths: number, minReviews: number): number {
-  return stats.reduce((sum, s, i) => sum + (i < recentMonths ? s.total : (minReviews === 0 ? s.total : s.rev[minReviews])), 0);
+export function policyCount(stats: MonthStat[], recentMonths: number, minReviews: number | null): number {
+  // minReviews が null なら「直近 recentMonths か月だけ」、0 なら全件、それ以外はその件数以上
+  return stats.reduce((sum, s, i) => sum + (i < recentMonths ? s.total : (minReviews === null ? 0 : minReviews === 0 ? s.total : (s.rev[minReviews] ?? 0))), 0);
 }
 
 export function renderReport(stats: MonthStat[]): string {
@@ -54,7 +55,8 @@ export function renderReport(stats: MonthStat[]): string {
     ['直近6か月 全件 ＋ それ以前 10件以上', policyCount(stats, 6, 10)],
     ['直近6か月 全件 ＋ それ以前 20件以上', policyCount(stats, 6, 20)],
     ['直近12か月 全件 ＋ それ以前 20件以上', policyCount(stats, 12, 20)],
-    ['直近12か月 全件のみ', policyCount(stats, 12, 999999)],
+    ['直近12か月 全件のみ', policyCount(stats, 12, null)],
+    ['直近3か月 全件 ＋ それ以前 20件以上', policyCount(stats, 3, 20)],
   ];
   for (const [name, n] of policies) lines.push(`| ${name} | ${n.toLocaleString('ja-JP')} | ${(n * 2).toLocaleString('ja-JP')} | 約 ${Math.round((n * 330) / 1024 / 1024 * 10) / 10} MB |`);
   lines.push('', '※ 探索 JSON は 1 作品あたり約 330 バイト（カード用レコード）で概算。人気順や指定軸の全作品はこの数に加算される。');
