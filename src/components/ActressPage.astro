@@ -159,7 +159,7 @@ const exploreHref = `/explore/?act=${encodeURIComponent(name)}`;
                     <div class="rank-actions"><CtaButton id={t.w.contentId} block={false} /></div>
                   )}
                 </div>
-                {i === 0 && t.w.sampleMovie && <div class="rank-movie"><SampleMovie movie={t.w.sampleMovie} title={t.w.title} /></div>}
+                {i === 0 && t.w.sampleMovie && <div class="rank-movie"><SampleMovie movie={t.w.sampleMovie} title={t.w.title} poster={t.w.imageLarge ?? t.w.imageSmall ?? undefined} posterAlt={`${t.w.title}のパッケージ画像`} /></div>}
               </li>
             ))}
           </ol>
