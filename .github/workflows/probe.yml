@@ -1,0 +1,50 @@
+# 母集団の規模を測る（未確認事項 #30）。コミットメッセージに [probe] を含む push で動く（例 "[probe months=36]"）。
+# API から月ごとの件数とレビュー件数の分布を数えて要約に出すだけで、DB・ビルド・配信は行わない。
+name: Probe
+
+on:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: contains(github.event.head_commit.message, '[probe')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Node.js を用意
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+
+      - name: 依存を入れる
+        run: npm ci
+
+      - name: 月数を読む
+        id: params
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          months=$(printf '%s' "$MSG" | grep -oE '\[probe[^]]*\]' | grep -oE 'months=[0-9]+' | cut -d= -f2 || true)
+          echo "months=${months:-36}" >> "$GITHUB_OUTPUT"
+
+      - name: 件数を数える
+        env:
+          FANZA_API_ID: ${{ secrets.FANZA_API_ID }}
+          FANZA_AFFILIATE_ID: ${{ secrets.FANZA_AFFILIATE_ID }}
+          MONTHS: ${{ steps.params.outputs.months }}
+        run: |
+          if [ -z "$FANZA_API_ID" ] || [ -z "$FANZA_AFFILIATE_ID" ]; then echo "::error::FANZA の secrets がありません"; exit 1; fi
+          node --experimental-strip-types src/data/probe-scope.ts --months "$MONTHS" | tee probe.log
+          echo "# 母集団の規模（直近 ${MONTHS} か月）" >> "$GITHUB_STEP_SUMMARY"
+          sed -n '/^## 月ごとの件数/,$p' probe.log >> "$GITHUB_STEP_SUMMARY"
