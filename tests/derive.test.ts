@@ -33,10 +33,10 @@ function table(label: DerivedLabel, rows: [Partial<Work>, boolean][], ctx: objec
   rows.forEach(([patch, want], i) => assert.equal(labelsOf(makeWork(i, patch), ctx).includes(label), want, `${label} 行${i} ${JSON.stringify(patch)}`));
 }
 
-test('境界値: 新作（30日以内）・定番（3年以上かつ50件以上）・高評価（4.5以上かつ20件以上）・長尺（180分以上）・短尺（60分以下）', () => {
+test('境界値: 新作（7日以内）・定番（3年以上かつ50件以上）・高評価（4.5以上かつ20件以上）・長尺（180分以上）・短尺（60分以下）', () => {
   table('新作', [
-    [{ releasedAt: ago(0) }, true], [{ releasedAt: ago(29) }, true], [{ releasedAt: ago(30) }, true], [{ releasedAt: ago(31) }, false],
-    [{ releasedAt: ago(-1) }, false], [{ releasedAt: null }, false], [{ releasedAt: `${ago(29)}T23:59:59` }, true], [{ releasedAt: `${ago(31)}T00:00:00` }, false],
+    [{ releasedAt: ago(0) }, true], [{ releasedAt: ago(6) }, true], [{ releasedAt: ago(7) }, true], [{ releasedAt: ago(8) }, false],
+    [{ releasedAt: ago(-1) }, false], [{ releasedAt: null }, false], [{ releasedAt: `${ago(6)}T23:59:59` }, true], [{ releasedAt: `${ago(8)}T00:00:00` }, false],
   ]); // 配信開始前（未来日）と日付なしは付かない
   table('定番', [
     [{ reviewCount: 50, releasedAt: '2023-11-01' }, true], [{ reviewCount: 50, releasedAt: '2023-11-02' }, false],

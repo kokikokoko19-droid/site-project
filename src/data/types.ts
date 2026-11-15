@@ -53,7 +53,7 @@ export type DerivedLabel =
   | '新作' | '定番' | '高評価' | '長尺' | '短尺' | 'セール中'
   | '初見向け' | 'シリーズ追い向け' | '出演者追い向け';
 
-/** ラベル閾値（既定値は docs/02 5.2 の仮値） */
+/** ラベル閾値（既定値は docs/02 5.2 の仮値。新作は第三者レビュー A I6 を受けて 7 日に絞った） */
 export type LabelThresholds = {
   newDays: number;            // 新作: 配信開始からの日数以内
   classicYears: number;       // 定番: 配信開始からの年数以上
@@ -67,7 +67,7 @@ export type LabelThresholds = {
 };
 
 export const DEFAULT_THRESHOLDS: LabelThresholds = {
-  newDays: 30, classicYears: 3, classicReviews: 50, topAvg: 4.5, topReviews: 20,
+  newDays: 7, classicYears: 3, classicReviews: 50, topAvg: 4.5, topReviews: 20,
   longMin: 180, shortMin: 60, seriesFollow: 12, actressFollow: 20,
 };
 
