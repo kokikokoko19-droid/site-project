@@ -2,6 +2,7 @@
 // 新着。配信開始日の新しい順に60件。
 import Base from '../layouts/Base.astro';
 import AdSlot from '../components/AdSlot.astro';
+import Breadcrumb from '../components/Breadcrumb.astro';
 import WorkGrid from '../components/WorkGrid.astro';
 import { loadCatalog } from '../lib/catalog.ts';
 
@@ -15,13 +16,14 @@ const works = catalog.recent(COUNT);
   description="配信が始まったばかりの作品を、配信開始日の新しい順に並べています。"
   dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
 >
-  <section class="section">
+  <Breadcrumb items={[{ href: '/', label: 'トップ' }, { label: '新着' }]} />
+  <section class="section" style="margin-top: 8px">
     <h1>新着</h1>
     {works.length > 0 && <p class="muted">配信開始日の新しい順に{works.length}件</p>}
   </section>
 
   <section class="section">
-    <WorkGrid works={works} empty="作品データを準備中です。" />
+    <WorkGrid works={works} empty="作品データを準備中です。" omitLabels={['新作']} />
     <p style="margin-top: 16px"><a class="btn" href="/explore/">探索ページで条件を絞って探す</a></p>
   </section>
 
