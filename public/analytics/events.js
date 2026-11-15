@@ -84,6 +84,7 @@
       send('cta_click', {
         content_id: idAfter(pathOf(el.getAttribute('href') || ''), 'go') || currentWorkId(),
         cta_type: el.getAttribute('data-cta') || (el.closest('#modal') ? 'modal' : 'link'),
+        cta_pos: el.getAttribute('data-cta-pos') || '', // ボタンの位置（top／sticky／bottom／hero など。無ければ送らない）
         transport_type: 'beacon',
       });
       return;

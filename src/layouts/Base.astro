@@ -205,12 +205,21 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
             {/* クレジット表記は DMM Web サービスの規定どおり（docs/10）。文言とリンク先は改変しない */}
             <p class="credit">Powered by <a href="https://affiliate.dmm.com/api/">FANZA Webサービス</a></p>
           </div>
+          <div class="links-group">
+          {/* 一覧ページ（軸の索引）。法務リンクの横に置く */}
+          <nav class="links" aria-label="一覧">
+            <a href="/actress/">出演者一覧</a>
+            <a href="/genre/">ジャンル一覧</a>
+            <a href="/maker/">メーカー一覧</a>
+            <a href="/series/">シリーズ一覧</a>
+          </nav>
           <div class="links">
             <a href="/about/">運営者情報</a>
             <a href="/terms/">利用規約</a>
             <a href="/privacy/">プライバシーポリシー</a>
             <a href="/removal/">掲載停止のご依頼</a>
             <a href="/about/#contact">お問い合わせ</a>
+          </div>
           </div>
         </div>
         {/* scoped な <style> は全要素に属性が付き、HTMLが膨らむので、モックと同じ inline style にする */}
