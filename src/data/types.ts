@@ -74,25 +74,29 @@ export const DEFAULT_THRESHOLDS: LabelThresholds = {
 /** 似た作品 */
 export type Similar = { contentId: string; similarId: string; score: number };
 
-/** 探索UI用の軽量レコード（カード表示に必要な項目だけ） */
+/** 価格帯（0: 〜500 円、1: 〜1,000 円、2: 〜2,000 円、3: 2,000 円超） */
+export type PriceBand = 0 | 1 | 2 | 3;
+
+/**
+ * 探索UI用の軽量レコード（公開 JSON。D-1・C-6 で項目を最小化）。
+ * 出演者・メーカー・シリーズ・ジャンルは index.json の names の添字。価格の実額・定価・レビュー件数と平均の実値・順位は含めない。
+ */
 export type WorkCardRecord = {
   id: string;
-  t: string;              // title
-  a: string[];            // actress names
-  m: string | null;       // maker name
-  s: string | null;       // series name
-  g: string[];            // genre names
-  v: number | null;       // volumeMin
-  d: string | null;       // releasedAt (YYYY-MM-DD)
-  rc: number;             // reviewCount
-  ra: number | null;      // reviewAvg
-  p: number | null;       // priceMin
-  lp: number | null;      // listPrice
+  t: string;              // 題名
+  a: number[];            // 出演者（names.actress の添字）
+  m: number | null;       // メーカー（names.maker の添字）
+  s: number | null;       // シリーズ（names.series の添字）
+  g: number[];            // ジャンル（names.genre の添字）
+  d: string | null;       // 配信開始日（YYYY-MM-DD）
+  v: number | null;       // 収録時間（分）
+  sc: number;             // おすすめ度（0〜100 の整数。評価のベイズ平均・レビュー件数・新しさ・人気順を書き出し時に合成）
+  rb: number | null;      // 評価の表示用（レビュー 5 件以上のときだけ 0.5 刻み。未満は null）
+  pb: PriceBand | null;   // 価格帯（価格なしは null）
   sale: boolean;          // セール中
   sm: boolean;            // サンプル動画あり
-  img: string | null;     // imageSmall
-  rk: number | null;      // rankPosition
   lb: DerivedLabel[];     // 派生ラベル
+  img: string | null;     // カード画像（imageSmall）
   ob: boolean;            // 外部リンク先（アフィリエイトURLか公式URL）があるか。/go/ の有無と一致
 };
 
