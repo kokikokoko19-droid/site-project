@@ -1,18 +1,22 @@
 ---
 // 作品ページ /v/{content_id}/（設計方針 2.1）。作品1件につき1ページを静的に生成する。
-// 構成は mocks/v2/ui.js の detail() と同じ順: パンくず → 見出し → 画像＋説明・仕様・価格とCTA・軸リンク → サンプル動画 → 広告枠 → 似た作品（棚）。
+// 並びは「題名 → 主画像 → 価格と FANZA ボタン（PR）→ 自動文 → 仕様表 → サンプル画像 → サンプル動画 → 似た作品 → 末尾の CTA」
+// （第三者レビュー A C1・B-3・D-8）。PC は左列に横長のジャケット、右列に題名から仕様表までを置く。
+// スマホは、メインの CTA が画面外にある間だけ画面下に細い帯（価格と「FANZAで見る PR」）を出す（JS 無しでは出ない）。
 // 紹介文は公式の文章を使わず、データ駆動の自動文（pageText）だけを出す。欠けた項目は行ごと省き、「不明」などは出さない。
 import Base from '../../layouts/Base.astro';
 import Shelf from '../../components/Shelf.astro';
 import AdSlot from '../../components/AdSlot.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
 import CtaButton from '../../components/CtaButton.astro';
 import AxisLinks from '../../components/AxisLinks.astro';
 import SampleMovie from '../../components/SampleMovie.astro';
 import SampleGallery from '../../components/SampleGallery.astro';
 import { loadCatalog } from '../../lib/catalog.ts';
 import type { CatalogWork } from '../../lib/catalog.ts';
-import { pageText } from '../../lib/autotext.ts';
-import { fmtDate, minutes, ymd, yen } from '../../lib/format.ts';
+import { pageText, positionOf, summaryText } from '../../lib/autotext.ts';
+import { cardLabels, saleEnd } from '../../lib/card.ts';
+import { discountRate, fmtDate, minutes, monthDay, ymd, yen } from '../../lib/format.ts';
 
 /** active の作品すべて（loadCatalog は gone を除く）。作品は props で渡す */
 export function getStaticPaths() {
@@ -29,40 +33,71 @@ const names = (refs: { name: string }[]): string[] => refs.map((r) => (r.name ??
 const cast = names(work.actresses);
 const castLine = cast.length > 5 ? `${cast.slice(0, 5).join('、')}ほか` : cast.join('、');
 const maker = work.makers.find((m) => m.id && (m.name ?? '').trim() !== '');
+const mainActress = work.actresses.find((a) => a.id && (a.name ?? '').trim() !== '');
+const mainSeries = work.series.find((s) => s.id && (s.name ?? '').trim() !== '');
 
-// meta description は自動文の先頭120字（超えるときは末尾に「…」）
-const text = pageText(work);
-const chars = [...text];
-const description = chars.length === 0 ? undefined : chars.length > 120 ? `${chars.slice(0, 120).join('')}…` : text;
+// 本文は位置づけの1〜2文。meta description は事実を並べた要約の先頭120字（超えるときは末尾に「…」）
+const text = pageText(work, positionOf(catalog, work));
+const summary = summaryText(work);
+const chars = [...summary];
+const description = chars.length === 0 ? undefined : chars.length > 120 ? `${chars.slice(0, 120).join('')}…` : summary;
 
+// パンくずは「トップ › 出演者一覧 › 出演者名 › 作品」。出演者がいなければメーカー、それも無ければトップの直下
 const crumbs = [
   { href: '/', label: 'トップ' },
-  { href: '/explore/', label: '探索' },
-  ...(maker ? [{ href: `/maker/${encodeURIComponent(maker.id)}/`, label: maker.name.trim() }] : []),
+  ...(mainActress
+    ? [{ href: '/actress/', label: '出演者一覧' }, { href: `/actress/${encodeURIComponent(mainActress.id)}/`, label: mainActress.name.trim() }]
+    : maker
+      ? [{ href: '/maker/', label: 'メーカー一覧' }, { href: `/maker/${encodeURIComponent(maker.id)}/`, label: maker.name.trim() }]
+      : []),
+  { label: work.title },
 ];
 
-// 画像は公式配信の直リンク。大（横長のジャケット）→ 一覧用 → 無地の枠
+// 画像は公式配信の直リンク。大（横長のジャケット。おおむね 800×538）→ 一覧用（147×200）→ 無地の枠
 const cover = work.imageLarge || work.imageList || null;
+const coverSize = work.imageLarge ? { w: 800, h: 538 } : { w: 147, h: 200 };
+const labels = cardLabels(work.derivedLabels, [], 99);
 const HOT = new Set(['高評価', 'セール中', '初見向け']);
 
-// 仕様表。欠けた行は出さない（レビューが0件の行も出さない）
+// 仕様表。欠けた行は出さない（レビューが0件の行も出さない）。「〜追い向け」は事実の言葉で書く（第三者レビュー A I6）
+const seriesCount = mainSeries ? (catalog.bySeries.get(mainSeries.id)?.length ?? 0) : 0;
+const followActress = work.derivedLabels.includes('出演者追い向け')
+  ? work.actresses
+      .map((a) => ({ name: (a.name ?? '').trim(), n: catalog.byActress.get(a.id)?.length ?? 0 }))
+      .filter((a) => a.name !== '')
+      .sort((a, b) => b.n - a.n)[0]
+  : undefined;
+const seriesValue = names(work.series).join('、');
 const reviewOk = work.reviewCount > 0 && typeof work.reviewAvg === 'number' && Number.isFinite(work.reviewAvg);
 const rows = [
   { label: '出演', value: cast.join('、') },
+  { label: '出演本数', value: followActress ? `${followActress.name}は掲載${followActress.n}本（この出演者の出演多数）` : '' },
   { label: 'メーカー', value: names(work.makers).join('、') },
-  { label: 'シリーズ', value: names(work.series).join('、') },
+  { label: 'シリーズ', value: seriesValue && seriesCount >= 2 ? `${seriesValue}（掲載${seriesCount}作）` : seriesValue },
   { label: '収録', value: minutes(work.volumeMin) },
   { label: '配信開始', value: fmtDate(work.releasedAt) },
   { label: 'レビュー', value: reviewOk ? `${work.reviewAvg!.toFixed(2)}点・${work.reviewCount}件` : '' },
 ].filter((r) => r.value !== '');
+
 const price = yen(work.priceMin);
 const onSale = work.derivedLabels.includes('セール中') && work.listPrice !== null && work.priceMin !== null && work.listPrice > work.priceMin;
+const off = onSale ? discountRate(work.priceMin, work.listPrice) : null;
+const end = onSale ? saleEnd(work) : '';
+// 配信開始日が今日（日本時間）より後なら予約受付中
+const todayJst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+const releaseDay = ymd(work.releasedAt);
+const upcoming = releaseDay !== null && /^\d{4}-\d{2}-\d{2}$/.test(releaseDay) && releaseDay > todayJst ? monthDay(releaseDay) : '';
 
 // /go/{id}/ は outboundUrl がある作品にしか作られない（go/[id].astro と同じ条件）。無い作品にはボタンを出さない
 const hasLink = typeof work.outboundUrl === 'string' && work.outboundUrl.length > 0;
 
 const similar = catalog.similar(work, 8);
-const series = names(work.series).join('、');
+// 似た作品の棚の終端。出演者がいれば出演者ページ、いつも探索（ジャンルの上位2つ。無ければ出演者・メーカー）
+const exploreQuery = new URLSearchParams();
+for (const g of names(work.genres).slice(0, 2)) exploreQuery.append('g', g);
+if ([...exploreQuery].length === 0 && mainActress) exploreQuery.set('act', mainActress.name.trim());
+if ([...exploreQuery].length === 0 && maker) exploreQuery.set('mak', maker.name.trim());
+const exploreHref = `/explore/${[...exploreQuery].length ? `?${exploreQuery}` : ''}`;
 
 // 構造化データ。商品（Product）ではなく CreativeWork を最小項目で。価格は入れない
 const released = fmtDate(work.releasedAt) ? ymd(work.releasedAt) : null;
@@ -75,67 +110,97 @@ const ld = {
   url: new URL(Astro.url.pathname, Astro.site ?? Astro.url).href,
 };
 const ldJson = JSON.stringify(ld).replace(/</g, '\\u003c'); // </script> で途切れないようにする
+
+// スマホの下部固定の帯。メインと末尾の CTA がどちらも画面外にある間だけ出す
+const STICKY_SCRIPT = `(function () {
+  var bar = document.getElementById('work-sticky');
+  if (!bar || !('IntersectionObserver' in window)) return;
+  var targets = document.querySelectorAll('[data-cta-watch]');
+  var visible = new Set();
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) visible.add(e.target); else visible.delete(e.target); });
+    var show = visible.size === 0;
+    bar.classList.toggle('is-shown', show);
+    document.body.classList.toggle('has-sticky-cta', show);
+    bar.inert = !show;
+  });
+  bar.inert = true;
+  targets.forEach(function (t) { io.observe(t); });
+})();`;
 ---
 
 <Base title={work.title} description={description} dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}>
   <div class="work-page">
-    <nav class="crumb" aria-label="パンくずリスト">
-      {crumbs.map((c) => <><a href={c.href}>{c.label}</a><span aria-hidden="true">›</span></>)}
-      <span aria-current="page">{work.title}</span>
-    </nav>
+    <Breadcrumb items={crumbs} />
 
     <article class="stack">
-      <header class="work-head">
-        {(maker || series) && <span class="eyebrow">{maker ? maker.name.trim() : ''}{maker && series ? '　／　' : ''}{series}</span>}
-        <h1>{work.title}</h1>
-        {castLine && <p class="cast">出演　{castLine}</p>}
-      </header>
-
-      <div class="detail">
-        <div class="stack" style="gap: 12px">
-          <div class="thumb wide">
-            {cover && <img src={cover} alt="" decoding="async" />}
-          </div>
+      <div class="work-main">
+        <header class="work-head">
+          <h1>{work.title}</h1>
+          {castLine && <p class="cast">出演　{castLine}</p>}
           {
-            work.derivedLabels.length > 0 && (
+            labels.length > 0 && (
               <div class="labels">
-                {work.derivedLabels.map((l) => <span class:list={['label', { hot: HOT.has(l) }]}>{l}</span>)}
+                {labels.map((l) => <span class:list={['label', { hot: HOT.has(l) }]}>{l}</span>)}
               </div>
             )
           }
-          <SampleGallery images={work.sampleImages} />
+        </header>
+
+        <div class="work-cover">
+          {cover && <img src={cover} alt={`${work.title}のパッケージ画像`} width={coverSize.w} height={coverSize.h} decoding="async" fetchpriority="high" />}
         </div>
-        <div class="stack">
-          {text && <p class="lead">{text}</p>}
+
+        {
+          (price || hasLink) && (
+            <div class="cta-box work-buy" data-cta-watch>
+              {
+                price && (
+                  <div class="work-price">
+                    <span class="price">
+                      <span class:list={{ sale: onSale }}>{price}</span>
+                      {onSale && <s>{yen(work.listPrice)}</s>}
+                    </span>
+                    {off ? <span class="off">-{off}%</span> : null}
+                    {end ? <span class="until">セールは{end}まで</span> : null}
+                    {upcoming ? <span class="reserve">予約受付中（{upcoming} 配信）</span> : null}
+                  </div>
+                )
+              }
+              {!price && upcoming && <p class="reserve">予約受付中（{upcoming} 配信）</p>}
+              {hasLink && <CtaButton id={work.contentId} pos="top" />}
+              <p class="note">価格と配信形式はデータ更新時点のものです。最新は販売ページで確認してください。</p>
+            </div>
+          )
+        }
+
+        {
+          text && (
+            <div class="work-text">
+              <p>{text}</p>
+              <p class="auto-note">作品データから自動で作成した紹介です</p>
+            </div>
+          )
+        }
+
+        <div class="work-spec">
           <dl class="spec">
             {rows.map((r) => <><dt>{r.label}</dt><dd>{r.value}</dd></>)}
           </dl>
-          {
-            (price || hasLink) && (
-              <div class="cta-box">
-                {
-                  price && (
-                    <div class="row" style="justify-content: space-between">
-                      <span class="dim" style="font-size: 12px; letter-spacing: .08em">価格</span>
-                      <span class="price">
-                        <span class:list={{ sale: onSale }}>{price}</span>
-                        {onSale && <s>{yen(work.listPrice)}</s>}
-                      </span>
-                    </div>
-                  )
-                }
-                {hasLink && <CtaButton id={work.contentId} />}
-                <p class="note">価格と配信形式はデータ更新時点のものです。最新は販売ページで確認してください。</p>
-              </div>
-            )
-          }
           <AxisLinks actresses={work.actresses} series={work.series} makers={work.makers} genres={work.genres} />
         </div>
       </div>
 
-      <SampleMovie movie={work.sampleMovie} title={work.title} heading="サンプル動画" />
+      {
+        work.sampleImages.length > 0 && (
+          <section>
+            <div class="section-head"><h2>サンプル画像</h2><span class="sub">タップで拡大</span></div>
+            <SampleGallery images={work.sampleImages} />
+          </section>
+        )
+      }
 
-      <AdSlot name="work-bottom" />
+      <SampleMovie movie={work.sampleMovie} title={work.title} heading="サンプル動画" />
 
       {
         similar.length > 0 && (
@@ -144,12 +209,51 @@ const ldJson = JSON.stringify(ld).replace(/</g, '\\u003c'); // </script> で途�
               <h2>似た作品</h2>
               <span class="sub">タグの重なりと同出演者・同シリーズで自動選定</span>
             </div>
-            <Shelf works={similar} label="似た作品" />
+            <Shelf works={similar} label="似た作品">
+              <Fragment slot="end">
+                {mainActress && (
+                  <a class="shelf-end" href={`/actress/${encodeURIComponent(mainActress.id)}/`}>
+                    <span>この出演者の作品をすべて見る</span><span class="dim">{mainActress.name.trim()}</span>
+                  </a>
+                )}
+                <a class="shelf-end" href={exploreHref}><span>似た条件で探索</span></a>
+              </Fragment>
+            </Shelf>
           </section>
         )
       }
+
+      {
+        hasLink && (
+          <div class="cta-box work-bottom" data-cta-watch>
+            <div class="work-price">
+              {price && (
+                <span class="price">
+                  <span class:list={{ sale: onSale }}>{price}</span>
+                  {onSale && <s>{yen(work.listPrice)}</s>}
+                </span>
+              )}
+              {off ? <span class="off">-{off}%</span> : null}
+              {upcoming ? <span class="reserve">予約受付中（{upcoming} 配信）</span> : null}
+            </div>
+            <CtaButton id={work.contentId} pos="bottom" />
+          </div>
+        )
+      }
+
+      <AdSlot name="work-bottom" />
     </article>
+
+    {
+      hasLink && (
+        <div class="work-sticky" id="work-sticky">
+          {price && <span class:list={['price', { sale: onSale }]}>{price}</span>}
+          <CtaButton id={work.contentId} pos="sticky" block={false} />
+        </div>
+      )
+    }
   </div>
+  {hasLink && <script is:inline set:html={STICKY_SCRIPT} />}
   <script is:inline type="application/ld+json" set:html={ldJson} />
 </Base>
 
@@ -157,6 +261,44 @@ const ldJson = JSON.stringify(ld).replace(/</g, '\\u003c'); // </script> で途�
   /* is:global にする理由: scoped だと全要素に属性が付き、数千ページ分のHTMLが膨らむ。クラス名は .work- で始めて衝突を避ける */
   .work-page .crumb, .work-head { overflow-wrap: anywhere; }
   .work-page .section-head h2 { flex: none; font-size: 18px; }
-  /* 左の列は幅が狭いので、サンプル画像は3列で並べる */
-  .work-page .detail .gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .work-main { display: grid; gap: calc(var(--sp) * 2.5); grid-template-areas: "head" "cover" "buy" "text" "spec"; }
+  .work-main > * { min-width: 0; }
+  .work-head { grid-area: head; margin: 0; }
+  .work-head h1 { font-family: var(--font-title); }
+  .work-cover { grid-area: cover; border-radius: 3px; overflow: hidden; background: var(--bg2); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); aspect-ratio: auto; min-height: 120px; }
+  /* 横長のジャケットを比率どおりに表示する（切り取らない。width/height 属性で読み込み前の高さを確保） */
+  .work-cover img { width: 100%; height: auto; }
+  .work-buy { grid-area: buy; }
+  .work-text { grid-area: text; display: grid; gap: 6px; }
+  .work-text p { font: 400 15px/1.85 var(--font); color: var(--fg1); }
+  .work-text .auto-note { font-size: 11.5px; line-height: 1.5; color: var(--fg2); }
+  .work-spec { grid-area: spec; display: grid; gap: calc(var(--sp) * 2); }
+  .work-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .work-price .off { color: var(--seal); font-weight: 700; font-size: 14px; white-space: nowrap; }
+  .work-price .until, .work-price .reserve, .work-buy .reserve { color: var(--fg1); font-size: 12.5px; white-space: nowrap; }
+  .work-price .reserve, .work-buy .reserve { color: var(--accent); }
+  @media (min-width: 960px) {
+    .work-main {
+      grid-template-columns: minmax(420px, 520px) minmax(0, 1fr);
+      grid-template-rows: auto auto auto auto 1fr;
+      grid-template-areas: "cover head" "cover buy" "cover text" "cover spec" "cover .";
+      column-gap: calc(var(--sp) * 5);
+      align-items: start;
+    }
+  }
+  .work-page .gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (min-width: 640px) { .work-page .gallery { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+  .work-bottom { max-width: 520px; }
+  /* 棚の終端カード */
+  .shelf-end { display: flex; flex-direction: column; justify-content: center; gap: 6px; aspect-ratio: 3 / 4; padding: var(--sp); border: 1px dashed var(--line-strong); border-radius: 3px; color: var(--accent); font-size: 13px; line-height: 1.5; text-align: center; align-items: center; }
+  .shelf-end:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .shelf-end .dim { font-size: 11.5px; overflow-wrap: anywhere; }
+  /* スマホの下部固定の帯（高さ 56px）。メインの CTA が画面外にある間だけ出す。PC では出さない */
+  .work-sticky { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; height: 56px; display: none; align-items: center; justify-content: space-between; gap: var(--sp); padding: 0 calc(var(--sp) * 2); background: var(--bg1); border-top: 1px solid var(--line-strong); box-shadow: 0 -6px 16px rgba(0,0,0,.45); }
+  .work-sticky .price { font-size: 18px; white-space: nowrap; }
+  .work-sticky .btn { min-height: 42px; flex: 0 1 auto; white-space: nowrap; }
+  @media (max-width: 959px) {
+    .work-sticky.is-shown { display: flex; }
+    body.has-sticky-cta { padding-bottom: 56px; }
+  }
 </style>
