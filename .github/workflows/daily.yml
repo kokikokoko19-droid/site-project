@@ -104,7 +104,8 @@ jobs:
             echo "::warning title=cache なし::復元できる DB の cache がないため、空の DB から始めます。取り込まれるのは直近 ${RECENT_DAYS} 日分と人気順の上位 ${RANKED_PAGES} ページ分だけです。必要なら手動実行で範囲を広げてください（docs/07_運用手順.md の 3.5 節）。"
           fi
           # --actress-profiles: works の出演者のうちプロフィール未取得の人だけを取り込む（1回 1500 人まで。残りは翌日に続く）
-          npm run ingest -- --recent-days "$RECENT_DAYS" --refresh --ranked-pages "$RANKED_PAGES" --actress-profiles
+          # --refresh-limit: 再取得は 1 日 1,500 件まで（取得日時の古い順に巡回。60 分の上限に収めるため）
+          npm run ingest -- --recent-days "$RECENT_DAYS" --refresh --refresh-limit 1500 --ranked-pages "$RANKED_PAGES" --actress-profiles
 
       - name: 合成データで代替する（認証情報なし）
         if: steps.creds.outputs.have_api != 'true'
