@@ -17,7 +17,7 @@ interface Props {
   showAdSlots?: boolean;
   /** OGP の種別。ガイド・特集などの記事は 'article'、それ以外は 'website'（既定） */
   ogType?: 'website' | 'article';
-  /** OGP 画像。絶対URL、または '/' から始まるパス。未指定なら og:image を出さない */
+  /** OGP 画像。絶対URL、または '/' から始まるパス。未指定なら既定の /og-default.png（1200×630） */
   ogImage?: string;
   /** true にすると検索結果に載せない（中継ページ /go/ と 404 用）。既定は載せる */
   noindex?: boolean;
@@ -25,13 +25,15 @@ interface Props {
 
 const SITE_NAME = 'AVめぐり';
 const SITE_TAGLINE = 'AV女優とおすすめ作品を見て回るカタログ';
+// 既定の OGP 画像（public/og-default.png。大きさは撮影時に 1200×630 で固定）
+const DEFAULT_OG_IMAGE = '/og-default.png';
 const {
   title,
   description = 'AV女優とおすすめ作品を見て回るカタログ。出演者・シリーズ・メーカー・ジャンルの軸から、評価と新しさで並べ替えて探せます。',
   dataUpdatedAt,
   showAdSlots = false,
   ogType = 'website',
-  ogImage,
+  ogImage = DEFAULT_OG_IMAGE,
   noindex = false,
 } = Astro.props;
 
@@ -54,6 +56,7 @@ function toAbsoluteUrl(value?: string) {
   }
 }
 const ogImageUrl = toAbsoluteUrl(ogImage);
+const ogImageIsDefault = ogImage === DEFAULT_OG_IMAGE;
 
 // 軸メニュー。URL は docs/02_設計方針.md の 2.1 に合わせる。
 // 特集・ハブ記事（使い方）は一覧ページのURLが未定義のため、確定後に追加する。
@@ -112,6 +115,8 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@500;700&display=swap" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonicalUrl} />
@@ -126,6 +131,8 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
     <meta property="og:url" content={canonicalUrl} />
     <meta property="og:site_name" content={SITE_NAME} />
     {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    {ogImageUrl && ogImageIsDefault && <meta property="og:image:width" content="1200" />}
+    {ogImageUrl && ogImageIsDefault && <meta property="og:image:height" content="630" />}
     <meta name="twitter:card" content="summary_large_image" />
     {/* 計測（GA4）。PUBLIC_GA4_ID があるときだけ出す。イベントの送信は /analytics/events.js（gtag が無ければ記録するだけ） */}
     {ga4Id && <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}></script>}
