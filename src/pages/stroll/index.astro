@@ -4,7 +4,7 @@
 // JS があるときは 1 度に 1 本だけ見せ、「次の棚へ」ボタンと左右スワイプ（←→キー）で切り替える。JS が無いときは全部の棚が縦に並ぶ。
 // 計測: 切り替えのたびに document へ CustomEvent「stroll:change」（detail: method・from・to・kind）を出す。
 // ボタンには data-stroll（next／prev／first）、「この棚をもっと見る」には data-shelf-more が付く（public/analytics/events.js で拾う）。
-// 表紙は 160px（--cover-w）を上限に格子で並べ、引き伸ばさない。表紙の上に文字を重ねない。
+// 表紙は横長のジャケット（800px 級）を原寸以下の格子で並べ、引き伸ばさない。表紙の上に文字を重ねない。
 import Base from '../../layouts/Base.astro';
 import Breadcrumb from '../../components/Breadcrumb.astro';
 import WorkCard from '../../components/WorkCard.astro';

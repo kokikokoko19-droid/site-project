@@ -51,7 +51,13 @@ const shelves: (ShelfDef & { tag?: boolean; size?: 'l' | 's' })[] = [
   ...dailyAxisShelves(catalog, 'genre', today, { n: 3, pool: 12, per: PER }),
   ...dailyAxisShelves(catalog, 'actress', today, { n: 2, pool: 10, per: PER }),
 ].filter((sh) => sh.works.length > 0);
+// 運営者の一言は、その作品が入っている最初の棚にだけ添える（同じ一言を何段も繰り返さない）
 const comments = commentMap(featuredConfig);
+const pops = shelves.map((sh) => {
+  const pop = shelfPop(sh.works, comments);
+  if (pop) for (const [id, c] of comments) if (c === pop) comments.delete(id);
+  return pop;
+});
 
 // 入口チップ（ヘッダー直下）
 const entries = [
@@ -139,7 +145,7 @@ const guidePlaceholders = [
             count={sh.count}
             size={sh.size}
             tag={sh.tag}
-            pop={shelfPop(sh.works, comments)}
+            pop={pops[i]}
             more={sh.href}
             eager={i === 0 ? 4 : 0}
           />
