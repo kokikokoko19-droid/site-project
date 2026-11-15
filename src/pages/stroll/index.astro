@@ -44,8 +44,8 @@ const anchor = (i: number) => `s${(i % total) + 1}`;
         {shelves.map((sh, i) => (
           <section class="stroll-shelf" id={anchor(i)} data-kind={sh.kind} aria-labelledby={`${anchor(i)}-h`}>
             <div class="stroll-head">
-              <span class="eyebrow">{KIND[sh.kind]}</span>
-              <h2 class="h-s" id={`${anchor(i)}-h`} tabindex="-1">{sh.title}<span class="n">{sh.count}件</span></h2>
+              {KIND[sh.kind] !== sh.title && <span class="eyebrow">{KIND[sh.kind]}</span>}
+              <h2 class="h-s" id={`${anchor(i)}-h`} tabindex="-1">{sh.title}{sh.count > 0 && <span class="n">{sh.count}件</span>}</h2>
               <span class="stroll-pos" aria-hidden="true">{i + 1} / {total}</span>
             </div>
             <div class="stroll-grid">

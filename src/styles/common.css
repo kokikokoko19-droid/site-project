@@ -507,16 +507,13 @@ body.show-ad-slots .ad-slot { display: flex; }
 .stroll-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px var(--sp); margin-bottom: calc(var(--sp) * 1.5); }
 .stroll-head .eyebrow { grid-column: 1 / -1; }
 .stroll-head h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; outline: none; }
+.stroll-head .n { color: var(--fg2); font: 400 12px/1 var(--font); font-variant-numeric: tabular-nums; margin-left: 8px; letter-spacing: .04em; }
 .stroll-pos { color: var(--fg2); font-size: var(--fs-s); font-variant-numeric: tabular-nums; white-space: nowrap; }
-/* 表紙の格子。スマホは 3 列（10 枚目は出さず 3 段にそろえる）、640px 以上は 5 列 × 2 段。1 枚は --cover-w を超えない */
-.stroll-grid { display: grid; grid-template-columns: repeat(3, minmax(0, var(--cover-w))); gap: calc(var(--sp) * 2) calc(var(--sp) * 1.5); justify-content: start; padding-bottom: 14px; }
-.stroll-grid > .card:nth-child(n + 10) { display: none; }
+/* 表紙の格子。横長ジャケットを、スマホは 2 列 × 5 段、960px 以上は 5 列 × 2 段で並べる（原寸 800px 以下なので拡大にならない） */
+.stroll-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: calc(var(--sp) * 2) calc(var(--sp) * 1.5); padding-bottom: 14px; }
 .stroll-grid .card { gap: 6px; }
 .stroll-grid .card-title { font-size: 12.5px; min-height: calc(2 * 1.45em); }
-@media (min-width: 640px) {
-  .stroll-grid { grid-template-columns: repeat(5, minmax(0, var(--cover-w))); }
-  .stroll-grid > .card:nth-child(n + 10) { display: grid; }
-}
+@media (min-width: 960px) { .stroll-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 /* 棚の板（下線）は .shelf-wrap と同じ見せ方 */
 .stroll-grid::after { content: ""; grid-column: 1 / -1; display: block; height: 4px; margin-top: -2px; border-radius: 2px; background: linear-gradient(to bottom, var(--line-strong), var(--line)); box-shadow: 0 8px 14px -6px rgba(0,0,0,.9); }
 /* 棚の下: 左に「この棚をもっと見る」、右にボタン。ボタンは棚（section）の直下に置き、スマホでは下端に留める */
@@ -534,3 +531,19 @@ body.show-ad-slots .ad-slot { display: flex; }
   .stroll-btns { grid-column: 1 / -1; position: sticky; bottom: 0; z-index: 5; margin: 0 calc(var(--sp) * -2); padding: var(--sp) calc(var(--sp) * 2) calc(var(--sp) + env(safe-area-inset-bottom)); background: rgba(20, 17, 16, .92); border-top: 1px solid var(--line); }
   .stroll-btns .btn-cta { flex: 1 1 auto; }
 }
+
+/* ---- カードの画像方針（横長ジャケット）。WorkCard は横長の大きいジャケット（imageLarge、800px 級）を 800:538 の枠に収める ----
+   縦長の小さい画像（147×200）は高解像度の画面でぼやけるので、imageLarge が無い作品の代わりにだけ使い、原寸を上限に枠の中央へ置く。
+   探索ページのカード（public/explorer/explorer-view.js）は縦長の .thumb のままで、この指定（.jk）は効かない */
+.thumb.jk { aspect-ratio: 800 / 538; }
+.thumb img.small { width: auto; height: auto; max-width: min(100%, 147px); max-height: min(100%, 200px); margin: auto; }
+/* 棚の 1 枚は 200px（スマホ）〜240px（PC）。横長なので 1 段が低くなり、スマホの 1 画面に棚が 2 段以上入る */
+.shelf > * { flex: 0 0 200px; max-width: 260px; }
+@media (min-width: 960px) { .shelf > * { flex-basis: 240px; } }
+.shelf .shelf-end { aspect-ratio: 800 / 538; align-self: start; }
+/* 格子は列の幅に合わせる（スマホ 2 列、PC は 1 列 200〜260px 程度）。探索の縦長カードの格子は従来どおり */
+.grid:has(.thumb.jk) { grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); }
+@media (min-width: 960px) { .grid:has(.thumb.jk) { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+/* 題名は折り返して 2 行（棚・カード）〜3 行（カルーセル）で省略し、長い英数字でも横にはみ出さない */
+.card-title, .fc-title { white-space: normal; overflow-wrap: anywhere; word-break: normal; }
+.fc-title { -webkit-line-clamp: 3; }

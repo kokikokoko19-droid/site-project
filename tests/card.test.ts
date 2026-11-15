@@ -42,4 +42,8 @@ describe('toCard', () => {
     assert.deepEqual(toCard(mk({ derivedLabels: ['セール中'] })).sale, { price: 1400, list: 2000, off: 30, end: '' });
     assert.equal(toCard(mk()).sale, null);
   });
+  it('横長の大きいジャケット（imageLarge）を持ち、無ければ null', () => {
+    assert.equal(toCard(mk({ imageLarge: 'https://example.invalid/x/xpl.jpg' })).imageLarge, 'https://example.invalid/x/xpl.jpg');
+    assert.equal(toCard(mk()).imageLarge, null);
+  });
 });
