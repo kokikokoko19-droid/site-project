@@ -1,37 +1,54 @@
 ---
 // トップ。構成は docs/02_設計方針.md の 2.1 と mocks/v2/top.html に合わせる。
-// 表紙型ヒーロー（今週の1本）／運営者の手紙／今日の発見／索引（軸の入口）／特集とガイド／新着の棚／セール中の棚
+// 入口チップ／目玉（カルーセル）／運営者の手紙／今日の発見（棚）／索引（軸の一覧への入口）／特集とガイド／新着の棚／セール中の棚
+// 見出しは大中小の 3 段、セクションの間隔は広い（80px）・狭い（40px）の 2 種（第三者レビュー B-5）
 import Base from '../layouts/Base.astro';
 import AdSlot from '../components/AdSlot.astro';
 import { getCollection } from 'astro:content';
 import ArticleCard from '../components/ArticleCard.astro';
-import Mark from '../components/Mark.astro';
+import FeatureCarousel from '../components/FeatureCarousel.astro';
 import Shelf from '../components/Shelf.astro';
 import WorkCard from '../components/WorkCard.astro';
+import featuredConfig from '../../config/featured.json';
 import { loadCatalog } from '../lib/catalog.ts';
 import { toCard } from '../lib/card.ts';
-import { cardText } from '../lib/autotext.ts';
-import { fmtDate, minutes, ymd } from '../lib/format.ts';
+import { pickFeatured } from '../lib/featured.ts';
+import { fmtDate, ymd } from '../lib/format.ts';
+import { jstToday, splitNew } from '../lib/newlist.ts';
 
 const catalog = loadCatalog();
 
-// 今週の1本（表紙型ヒーロー）。「高評価」ラベルの先頭、無ければ今日の発見の先頭、さらに無ければ新着の先頭
-const hero = catalog.byLabel('高評価', 1)[0] ?? catalog.todays(1)[0] ?? catalog.recent(1)[0] ?? null;
-// 今日の発見は meta.todays の作品（無ければ「高評価」ラベル）から、ヒーローと重ならない3件
-const pool = catalog.todays(4);
-const discoveries = (pool.length > 0 ? pool : catalog.byLabel('高評価', 4)).filter((w) => w !== hero).slice(0, 3);
+// 目玉。運営者の指定（config/featured.json）を先に、足りない枠は「高評価」で補って最大5件
+const featured = pickFeatured(catalog, featuredConfig);
+const featuredIds = new Set(featured.map((f) => f.work.contentId));
 
-// ヒーローの表示。表紙は横長の大きいジャケット（imageLarge）。無ければ一覧用、さらに無ければ無地の枠
-const heroCover = hero ? hero.imageLarge || hero.imageList || null : null;
-const heroCast = hero ? hero.actresses.map((a) => a.name).join('、') || hero.makers[0]?.name || '' : '';
-const heroMaker = hero?.makers[0]?.name ?? '';
-const heroMin = hero ? minutes(hero.volumeMin) : '';
-const heroRated = hero ? hero.reviewCount > 0 && typeof hero.reviewAvg === 'number' && Number.isFinite(hero.reviewAvg) : false;
+// 今日の発見は meta.todays の作品から、目玉と重ならないものを最大10件。6件に満たなければ「定番」「高評価」で補う
+const DISCOVER_MIN = 6, DISCOVER_MAX = 10;
+const discoveries = catalog.todays().filter((w) => !featuredIds.has(w.contentId)).slice(0, DISCOVER_MAX);
+if (discoveries.length < DISCOVER_MIN) {
+  for (const w of [...catalog.byLabel('定番'), ...catalog.byLabel('高評価')]) {
+    if (discoveries.length >= DISCOVER_MIN) break;
+    if (!featuredIds.has(w.contentId) && !discoveries.includes(w)) discoveries.push(w);
+  }
+}
+
+// 棚の件数（見出しに添える）。新着は直近30日の配信、セールはセール中の全件
+const newCount = splitNew(catalog.recent(), jstToday()).recent.length;
+const saleCount = catalog.onSale().length;
+
+// 入口チップ（ヘッダー直下）
+const entries = [
+  { href: '/explore/', label: '探索' },
+  { href: '/new/', label: '新着' },
+  { href: '/sale/', label: 'セール' },
+  { href: '/ranking/', label: 'ランキング' },
+  { href: '/actress/', label: '出演者一覧' },
+];
 
 // 運営者の手紙の日付は、データの最終取り込み日
 const letterDate = fmtDate(ymd(catalog.meta.lastIngestAt));
 
-// 索引（軸の入口）。軸の一覧ページは無いので、件数と、作品数の多い上位5件を出す
+// 索引（軸の入口）。件数と、作品数の多い上位5件を出し、末尾から軸の一覧ページ（/actress/ など）へ
 const TOP_AXES = 5;
 const axes = [
   { key: 'actress', label: '出演者', unit: '人', index: catalog.byActress, names: catalog.refNames.actress },
@@ -74,35 +91,16 @@ const guidePlaceholders = [
   description="AV女優とおすすめ作品を見て回るカタログ。出演者・シリーズ・メーカー・ジャンルの軸から探せます。今日の発見、新着、セール中の作品も確認できます。"
   dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
 >
-  {/* ページの見出し（h1）。ロゴはリンクなので、検索向けに説明文を h1 にする */}
-  <h1 class="site-lead">AV女優とおすすめ作品を見て回るカタログ</h1>
+  {/* ページの見出し（h1）。ロゴはリンクなので、検索向けに説明文を h1 にする。ヘッダーのタグラインとは別の文にする（B-11） */}
+  <h1 class="site-lead">AV女優と作品を、出演者・シリーズ・メーカーの軸から見て回る</h1>
 
-  {
-    hero && (
-      <section class="cover-hero" aria-labelledby="hero-title">
-        <div class:list={['thumb', 'wide']}>
-          {heroCover && <img src={heroCover} alt="" decoding="async" fetchpriority="high" />}
-        </div>
-        <div class="text">
-          <span class="eyebrow"><Mark />今週の1本　運営者が選ぶ</span>
-          <h2 id="hero-title">{hero.title}</h2>
-          {cardText(hero) && <p class="lead">{cardText(hero)}</p>}
-          <div class="hero-meta">
-            {heroCast && <span>出演 <b>{heroCast}</b></span>}
-            {heroMaker && <span>メーカー <b>{heroMaker}</b></span>}
-            {heroMin && <span>収録 <b class="num">{heroMin}</b></span>}
-            {heroRated && <span>評価 <b class="num">★ {hero.reviewAvg!.toFixed(1)}</b> <span class="dim">{hero.reviewCount}件</span></span>}
-          </div>
-          <div class="actions">
-            <a class="btn btn-cta" href={`/v/${hero.contentId}/`}>作品ページを見る</a>
-            <a class="btn" href="/explore/?lab=%E9%AB%98%E8%A9%95%E4%BE%A1">高評価の作品を探す</a>
-          </div>
-        </div>
-      </section>
-    )
-  }
+  <nav class="entry-chips" aria-label="入口">
+    {entries.map((e) => <a href={e.href}>{e.label}</a>)}
+  </nav>
 
-  <section class="section">
+  <FeatureCarousel items={featured} />
+
+  <section class="section-s">
     <div class="letter">
       <div>
         <div class="from">運営者から</div>
@@ -113,15 +111,20 @@ const guidePlaceholders = [
     </div>
   </section>
 
-  <section class="section">
+  <section class="section-l discover">
     <div class="section-head">
-      <h2>今日の発見</h2><span class="sub">評価と定番から選んだ作品</span>
+      <h2 class="h-l">今日の発見</h2>
       <a href="/explore/">もっと見る →</a>
     </div>
     {
       discoveries.length > 0 ? (
-        <div class="finds">
-          {discoveries.map((w) => <WorkCard work={toCard(w)} variant="find" />)}
+        <div class="shelf-wrap">
+          <div class="shelf" role="region" aria-label="今日の発見" tabindex="0">
+            {discoveries.map((w, i) => {
+              const card = toCard(w);
+              return <WorkCard work={card} variant="shelf" sub={card.cardText || undefined} eager={i < 4} />;
+            })}
+          </div>
         </div>
       ) : (
         <div class="empty"><p>作品データを準備中です。</p></div>
@@ -129,9 +132,9 @@ const guidePlaceholders = [
     }
   </section>
 
-  <section class="section">
+  <section class="section-l">
     <div class="section-head">
-      <h2>索引</h2><span class="sub">出演者・シリーズ・メーカー・ジャンルから</span>
+      <h2 class="h-m">索引</h2>
     </div>
     {/* .entry は計測（analytics/events.js の axis_nav）が見るクラス */}
     <div class="index entry">
@@ -147,15 +150,15 @@ const guidePlaceholders = [
               </ol>
             )
           }
-          <a class="more" href="/explore/">{a.label}を探索で見る →</a>
+          <a class="more" href={`/${a.key}/`}>{a.label}の一覧へ →</a>
         </div>
       ))}
     </div>
   </section>
 
-  <section class="section">
+  <section class="section-l">
     <div class="section-head">
-      <h2>特集とガイド</h2><span class="sub">運営者が選び、運営者が書く</span>
+      <h2 class="h-m">特集とガイド</h2>
       <span class="row"><a href="/feature/">特集一覧 →</a><a href="/guide/">ガイド一覧 →</a></span>
     </div>
     <div class="hub2">
@@ -183,17 +186,17 @@ const guidePlaceholders = [
     </div>
   </section>
 
-  <section class="section">
+  <section class="section-s">
     <div class="section-head">
-      <h2>新着</h2><span class="sub">直近の配信開始</span>
+      <h2 class="h-s">新着{newCount > 0 && <span class="n">直近30日 {newCount}件</span>}</h2>
       <a href="/new/">もっと見る →</a>
     </div>
     <Shelf works={catalog.recent(10)} sub="date" label="新着の作品" empty="作品データを準備中です。" />
   </section>
 
-  <section class="section">
+  <section class="section-s">
     <div class="section-head">
-      <h2>セール中</h2><span class="sub">期間限定</span>
+      <h2 class="h-s">セール中{saleCount > 0 && <span class="n">{saleCount}件</span>}</h2>
       <a href="/sale/">もっと見る →</a>
     </div>
     <Shelf works={catalog.onSale(10)} tag label="セール中の作品" empty="現在セール中の作品はありません。" />

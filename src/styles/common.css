@@ -360,3 +360,73 @@ body.show-ad-slots .ad-slot { display: flex; }
 .pager .btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
 /* 「もっと見る」系の文字リンク。タップ領域を 44px 以上にする */
 .more-link { display: inline-flex; align-items: center; min-height: 44px; padding-block: 10px; color: var(--accent); font-size: var(--fs-s); }
+
+/* ---- トップ（第三者レビュー A I1、B-5、B-10、B-11） ---- */
+:root { --gap-l: 80px; --gap-s: 40px; }
+.section-l { margin: var(--gap-l) 0; }
+.section-s { margin: var(--gap-s) 0; }
+/* 見出しの大中小。目玉と今日の発見は大、索引・特集は中、棚は小＋件数 */
+.h-l { font-size: 28px; }
+.h-m { font-size: 22px; }
+.h-s { font-size: 17px; }
+.section-head h2 { white-space: nowrap; }
+.section-head .n { color: var(--fg2); font: 400 12px/1 var(--font); font-variant-numeric: tabular-nums; margin-left: 8px; letter-spacing: .04em; }
+@media (max-width: 640px) { .h-l { font-size: 24px; } .section-l { margin: 56px 0; } }
+
+/* ヘッダー直下の入口チップ（横スクロール） */
+.entry-chips { display: flex; gap: var(--sp); overflow-x: auto; scrollbar-width: none; margin: calc(var(--sp) * 1.5) calc(var(--sp) * -2) 0; padding: 0 calc(var(--sp) * 2) 2px; }
+.entry-chips::-webkit-scrollbar { display: none; }
+.entry-chips a { flex: none; display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--fg1); font-size: 13px; white-space: nowrap; }
+.entry-chips a:hover { color: var(--accent); border-color: var(--accent); }
+
+/* 目玉のカルーセル（components/FeatureCarousel.astro）。自動では送らない */
+.feature-carousel { margin-top: calc(var(--sp) * 2); }
+.fc-track { position: relative; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+.fc-track::-webkit-scrollbar { display: none; }
+.fc-track:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+/* スマホは次の 1 枚を 16px 見切らせる（12px の間隔＋16px） */
+.fc-slide { flex: 0 0 calc(100% - 28px); min-width: 0; scroll-snap-align: start; display: grid; grid-template-rows: auto 1fr; gap: calc(var(--sp) * 1.5); }
+.fc-slide:last-child { scroll-snap-align: end; }
+.fc-cover { position: relative; display: block; aspect-ratio: 800 / 538; overflow: hidden; border-radius: 3px; background: var(--bg2); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
+.fc-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.fc-text { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.fc-title { font: 700 19px/1.45 var(--font-title); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; text-wrap: wrap; }
+.fc-title a:hover { color: var(--accent); }
+.fc-meta { display: flex; flex-wrap: wrap; gap: 2px 16px; color: var(--fg1); font-size: 12.5px; min-width: 0; }
+.fc-meta > span { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-meta b { color: var(--fg0); font-weight: 600; }
+.fc-comment { margin: 0; color: var(--fg0); font-size: 14px; line-height: 1.75; padding-left: 12px; border-left: 2px solid var(--accent); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.fc-actions { display: flex; flex-wrap: wrap; gap: var(--sp); align-self: end; }
+.fc-actions .btn { flex: 1 1 0; white-space: nowrap; }
+.fc-ctrl { visibility: hidden; display: flex; align-items: center; gap: 12px; min-height: 44px; margin-top: var(--sp); }
+.is-ready .fc-ctrl { visibility: visible; }
+.fc-dots { display: flex; gap: 6px; }
+.fc-dot { width: 18px; height: 3px; border-radius: 2px; background: var(--line-strong); }
+.fc-dot.on { background: var(--accent); }
+.fc-count { display: none; margin-left: auto; color: var(--fg1); font-size: 15px; letter-spacing: .08em; }
+.fc-count .fc-now { color: var(--accent); }
+.fc-arrow { display: none; width: 44px; height: 44px; align-items: center; justify-content: center; border: 1px solid var(--line-strong); border-radius: 50%; background: transparent; color: var(--fg0); font: 400 22px/1 var(--font); cursor: pointer; }
+.fc-arrow:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.fc-arrow:disabled { opacity: .35; cursor: default; }
+@media (min-width: 760px) {
+  /* PC は次の 1 枚を 12% 見切らせる。表紙が左 60%、文字が右 40% */
+  .fc-track { gap: 24px; }
+  .fc-slide { flex-basis: 88%; grid-template-rows: none; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: calc(var(--sp) * 3); align-items: stretch; }
+  .fc-text { align-content: center; }
+  .fc-title { font-size: 24px; -webkit-line-clamp: 3; }
+  .fc-actions { align-self: auto; }
+  .fc-actions .btn { flex: 0 0 auto; }
+  .fc-ctrl { gap: 16px; }
+  .fc-count { display: inline; }
+  .fc-arrow { display: inline-flex; }
+  .fc-ctrl .fc-arrow:first-of-type { order: 3; }
+  .fc-ctrl .fc-count { order: 2; }
+  .fc-ctrl .fc-arrow:last-of-type { order: 4; }
+}
+
+/* 今日の発見（理由の一文付きの棚）。題名 2 行・理由 1 行で省略し、高さをそろえる */
+.discover .card-title { min-height: calc(2 * 1.45em); }
+.discover .card-meta { color: var(--fg1); }
+
+/* フッターのリンク群（一覧ページ／法務） */
+.site-footer .links-group { display: grid; gap: calc(var(--sp) * 1.5); align-content: start; }
