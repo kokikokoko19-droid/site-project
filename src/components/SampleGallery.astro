@@ -1,6 +1,7 @@
 ---
 // サンプル画像（公式配信の直リンク）。一覧には小さい版（…/{cid}-N.jpg）を並べ、タップで大きい版を Lightbox で開く。
 // 小さい版が読めないときは onerror で大きい版に差し替える。規約により加工は拡大縮小のみ。切り取りはせず、枠の中に全体を収める（object-fit: contain）。
+// 画面の密度が 2 倍以上（スマホの大半）では srcset で大きい版を選ばせる。1 倍の画面では小さい版のままなので、枠の幅を 120px までに抑えて引き伸ばさない（v/[id].astro）。
 // 最初は FIRST 枚だけを出し、残りは「すべて見る」（details 要素。JS 無しでも開く）の中に入れる。閉じている間は読み込まれない。
 import Lightbox from './Lightbox.astro';
 import { sampleSmallUrl } from '../lib/format.ts';
@@ -21,8 +22,8 @@ const items = images
   });
 const head = items.slice(0, FIRST);
 const rest = items.slice(FIRST);
-// 小さい版が読めないときは大きい版へ（1回だけ）
-const FALLBACK = "this.onerror=null;if(this.dataset.full&&this.src!==this.dataset.full)this.src=this.dataset.full";
+// 小さい版が読めないときは大きい版へ（1回だけ）。srcset を外さないと差し替えた src が使われない
+const FALLBACK = "this.onerror=null;this.removeAttribute('srcset');if(this.dataset.full&&this.src!==this.dataset.full)this.src=this.dataset.full";
 ---
 
 {
@@ -31,7 +32,7 @@ const FALLBACK = "this.onerror=null;if(this.dataset.full&&this.src!==this.datase
       <div class="gallery">
         {head.map((it) => (
           <button type="button" class="g-item" data-lightbox-src={it.full} aria-label={`サンプル画像 ${it.n} を拡大`}>
-            <img src={it.small} data-full={it.full} alt="" loading="lazy" decoding="async" onerror={FALLBACK} />
+            <img src={it.small} srcset={`${it.small} 1x, ${it.full} 2x`} data-full={it.full} alt="" loading="lazy" decoding="async" onerror={FALLBACK} />
           </button>
         ))}
       </div>
@@ -41,7 +42,7 @@ const FALLBACK = "this.onerror=null;if(this.dataset.full&&this.src!==this.datase
           <div class="gallery">
             {rest.map((it) => (
               <button type="button" class="g-item" data-lightbox-src={it.full} aria-label={`サンプル画像 ${it.n} を拡大`}>
-                <img src={it.small} data-full={it.full} alt="" loading="lazy" decoding="async" onerror={FALLBACK} />
+                <img src={it.small} srcset={`${it.small} 1x, ${it.full} 2x`} data-full={it.full} alt="" loading="lazy" decoding="async" onerror={FALLBACK} />
               </button>
             ))}
           </div>

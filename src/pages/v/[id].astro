@@ -332,6 +332,8 @@ const STICKY_SCRIPT = `(function () {
   }
   .work-page .gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   @media (min-width: 640px) { .work-page .gallery { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+  /* 1 倍の画面では小さい版（幅 120px）が選ばれるので、枠を 120px までにして引き伸ばさない（第三者レビュー B-1）。2 倍以上の画面は srcset で大きい版になる */
+  @media (min-width: 640px) and (max-resolution: 1.5dppx) { .work-page .gallery { grid-template-columns: repeat(auto-fill, minmax(100px, 120px)); } }
   .work-bottom { max-width: 520px; }
   /* 棚の終端カード */
   .shelf-end { display: flex; flex-direction: column; justify-content: center; gap: 6px; aspect-ratio: 3 / 4; padding: var(--sp); border: 1px dashed var(--line-strong); border-radius: 3px; color: var(--accent); font-size: 13px; line-height: 1.5; text-align: center; align-items: center; }

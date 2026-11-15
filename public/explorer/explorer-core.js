@@ -253,7 +253,9 @@ export async function loadWorks({ onIndex, onFirst, onProgress, getJson = fetchJ
   // チャンク名は更新しても変わらないので、生成日時をURLに付けて、古い内容がキャッシュから出ないようにする
   const v = encodeURIComponent(index.generatedAt || '');
   let done = 0;
-  const parts = chunks.map((name, i) => getJson(`/data/${name}?v=${v}`).then((part) => {
+  // チャンクは 1 回だけやり直す（ホストの一時的な 5xx や、ボット対策のページが JSON の代わりに返る瞬間への備え）
+  const getChunk = (url) => getJson(url).catch(() => new Promise((r) => setTimeout(r, 800)).then(() => getJson(url)));
+  const parts = chunks.map((name, i) => getChunk(`/data/${name}?v=${v}`).then((part) => {
     if (!Array.isArray(part)) throw new Error(`${name} の形式が不正です`);
     done += 1;
     if (onProgress) onProgress(done, chunks.length);
