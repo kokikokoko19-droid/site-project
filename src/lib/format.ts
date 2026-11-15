@@ -27,3 +27,28 @@ export function minutes(n: number | null): string {
   if (typeof n !== 'number' || !Number.isFinite(n) || Math.round(n) <= 0) return '';
   return `${Math.round(n)}分`;
 }
+
+/** "12/4" の形（月/日、先頭の0なし）。null や YYYY-MM-DD で始まらない値は空文字 */
+export function monthDay(iso: string | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd(iso) ?? '');
+  return m ? `${Number(m[2])}/${Number(m[3])}` : '';
+}
+
+/** 割引率（%、整数に丸める）。定価が現在価格より高いときだけ数を返し、それ以外は null */
+export function discountRate(price: number | null, list: number | null): number | null {
+  if (typeof price !== 'number' || typeof list !== 'number' || !Number.isFinite(price) || !Number.isFinite(list)) return null;
+  if (list <= 0 || price < 0 || price >= list) return null;
+  const r = Math.round((1 - price / list) * 100);
+  return r > 0 ? r : null;
+}
+
+/**
+ * サンプル画像の大きい版 URL（…/{cid}/{cid}jp-N.jpg）から、小さい版 URL（…/{cid}/{cid}-N.jpg）を組み立てる。
+ * どちらも公式配信の同じ画像の別サイズで、こちらで画像を加工するわけではない。
+ * 形が合わない URL（すでに小さい版のものを含む）は null を返す（呼び出し側は元の URL をそのまま使う）。
+ */
+export function sampleSmallUrl(large: string): string | null {
+  if (typeof large !== 'string') return null;
+  const m = /^(https?:\/\/[^?#]*\/)([^/?#]+)jp-(\d+)\.jpg$/.exec(large.trim());
+  return m ? `${m[1]}${m[2]}-${m[3]}.jpg` : null;
+}

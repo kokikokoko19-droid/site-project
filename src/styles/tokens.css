@@ -21,6 +21,8 @@
   --fs-b: 15px;
   --fs-s: 12.5px;
   --font-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  /* 作品名・人名などの可変の見出し。Web フォントを含めず、端末の明朝に任せる */
+  --font-title: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
   --font: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
   --maxw: 1200px;
   color-scheme: dark;
