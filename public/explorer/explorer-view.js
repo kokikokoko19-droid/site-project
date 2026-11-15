@@ -18,10 +18,13 @@ const namesOf = (names, kind, list) => (list || []).map((i) => nameOf(names, kin
 
 /** 画像は公式配信の直リンクをそのまま表示する（加工は拡大縮小のみ）。http(s) 以外のURLは使わない。無いときは無地の枠 */
 function thumbHtml(w) {
-  const src = typeof w.img === 'string' && /^https?:\/\//.test(w.img) ? w.img : '';
-  return src
-    ? `<div class="thumb"><img src="${esc(src)}" alt="" loading="lazy" decoding="async"></div>`
-    : `<div class="thumb"></div>`;
+  // 公式の小さい縦長画像（…ps.jpg、147×200）は高解像度の画面でぼやけるため、同じ命名規則の横長ジャケット（…pl.jpg、800px 級）を主に使う。
+  // 読めないときは onerror で小さい版に戻す（切り取り・加工はしない。object-fit: contain）
+  const small = typeof w.img === 'string' && /^https?:\/\//.test(w.img) ? w.img : '';
+  const large = /ps\.jpg$/.test(small) ? small.replace(/ps\.jpg$/, 'pl.jpg') : '';
+  if (!small) return `<div class="thumb jk"></div>`;
+  if (!large) return `<div class="thumb jk"><img src="${esc(small)}" alt="" loading="lazy" decoding="async" width="147" height="200" class="small"></div>`;
+  return `<div class="thumb jk"><img src="${esc(large)}" alt="" loading="lazy" decoding="async" width="800" height="538" data-fallback="${esc(small)}" onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;this.width=147;this.height=200;this.classList.add('small');this.removeAttribute('data-fallback');}"></div>`;
 }
 
 function labelsHtml(labels, max) {

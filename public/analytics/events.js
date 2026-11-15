@@ -102,6 +102,12 @@
       return;
     }
 
+    // 棚の「この棚をもっと見る」（トップ・ぶらぶら・軸ページ）
+    if ((el = t.closest('[data-shelf-more]'))) {
+      send('axis_nav', { axis: pathOf(el.getAttribute('href') || '').split('/')[1], place: 'shelf_more', transport_type: 'beacon' });
+      return;
+    }
+
     // 軸ページへの移動（作品ページの軸リンク、トップの入口）
     if ((el = t.closest('.axis-links a, .entry a'))) {
       send('axis_nav', {
@@ -154,6 +160,11 @@
   }
 
   document.addEventListener('click', onClick, true);
+  // ぶらぶらページの棚の切り替え（ボタン・スワイプ・キー。/stroll/ が発火する）。選んだ棚の名前は送らない
+  document.addEventListener('stroll:change', function (e) {
+    var d = (e && e.detail) || {};
+    send('stroll_next', { method: String(d.method || ''), to: Number(d.to) || 0, shelf_kind: String(d.kind || '') });
+  });
   document.addEventListener('change', onChange, true);
   document.addEventListener('submit', onSubmit, true);
 })();

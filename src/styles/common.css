@@ -544,7 +544,7 @@ body.show-ad-slots .ad-slot { display: flex; }
 
 /* ---- カードの画像方針（横長ジャケット）。WorkCard は横長の大きいジャケット（imageLarge、800px 級）を 800:538 の枠に収める ----
    縦長の小さい画像（147×200）は高解像度の画面でぼやけるので、imageLarge が無い作品の代わりにだけ使い、原寸を上限に枠の中央へ置く。
-   探索ページのカード（public/explorer/explorer-view.js）は縦長の .thumb のままで、この指定（.jk）は効かない */
+   探索ページのカード（public/explorer/explorer-view.js）も同じ方針（…ps.jpg → …pl.jpg を組み立て、読めなければ小さい版に戻す） */
 .thumb.jk { aspect-ratio: 800 / 538; }
 .thumb img.small { width: auto; height: auto; max-width: min(100%, 147px); max-height: min(100%, 200px); margin: auto; }
 /* 棚の 1 枚は 200px（スマホ）〜240px（PC）。横長なので 1 段が低くなり、スマホの 1 画面に棚が 2 段以上入る */
