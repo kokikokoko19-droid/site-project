@@ -1,38 +1,147 @@
 ---
-// セール中の作品（「セール中」の派生ラベルが付いたもの）。配信開始日の新しい順。
-// 実データではセール対象が常時 1 割前後あり（2026-11-08 の確認で 582 件中 48 件）、全件を 1 ページに並べると数百件になるため、
-// ここは MAX 件までにして、残りは探索ページ（セール中の絞り込み付き）へ送る。
+// セール中の作品（「セール中」の派生ラベルが付いたもの）。第三者レビュー B-2・A I3・D-16。
+// カードに価格行（セール価格・取り消し線の定価・割引率・終了日）を出し、このページでは「セール中」ラベルを省く。
+// 並べ替え（割引率／安い順／評価順／新しい順）と価格帯の絞り込み（〜500円・〜1,000円）は、クライアント側の小さな JS で行い、
+// 状態は ?sort= と ?max= に残す。JS が無いときは割引率の高い順のまま全件を出す。
+// 実データではセール対象が常時 1 割前後あり、全件を 1 ページに並べると数百件になるため、割引率の高い MAX 件までにして、残りは探索ページへ送る。
 import Base from '../layouts/Base.astro';
 import AdSlot from '../components/AdSlot.astro';
-import WorkGrid from '../components/WorkGrid.astro';
+import Breadcrumb from '../components/Breadcrumb.astro';
+import WorkCard from '../components/WorkCard.astro';
 import { loadCatalog } from '../lib/catalog.ts';
+import { toCard } from '../lib/card.ts';
+import { globalMeanAvg, workBayes } from '../lib/actress-stats.ts';
+import { discountRate } from '../lib/format.ts';
 
-const MAX = 120;
+const MAX = 240;
 const catalog = loadCatalog();
-const total = catalog.onSale().length;
-const works = catalog.onSale(MAX);
+const meanAvg = globalMeanAvg(catalog);
+const all = catalog.onSale(); // 配信開始日の新しい順
+const total = all.length;
+const items = all
+  .map((w, i) => ({ w, off: discountRate(w.priceMin, w.listPrice) ?? 0, price: w.priceMin ?? 0, rating: workBayes(w, meanAvg), date: i }))
+  .sort((a, b) => b.off - a.off || a.date - b.date)
+  .slice(0, MAX);
+const SORTS = [
+  { key: 'off', label: '割引率' },
+  { key: 'price', label: '安い順' },
+  { key: 'rating', label: '評価順' },
+  { key: 'new', label: '新しい順' },
+];
+const BANDS = [
+  { max: 500, label: '〜500円' },
+  { max: 1000, label: '〜1,000円' },
+];
+
+const SCRIPT = `(function () {
+  var grid = document.getElementById('sale-grid');
+  if (!grid) return;
+  var cells = Array.prototype.slice.call(grid.children);
+  var count = document.getElementById('sale-count'), none = document.getElementById('sale-none');
+  var KEYS = { off: function (a, b) { return b.dataset.off - a.dataset.off || a.dataset.date - b.dataset.date; },
+    price: function (a, b) { return a.dataset.price - b.dataset.price || a.dataset.date - b.dataset.date; },
+    rating: function (a, b) { return b.dataset.rating - a.dataset.rating || a.dataset.date - b.dataset.date; },
+    'new': function (a, b) { return a.dataset.date - b.dataset.date; } };
+  function read() {
+    var u = new URLSearchParams(location.search);
+    var sort = KEYS[u.get('sort')] ? u.get('sort') : 'off';
+    var max = Number(u.get('max'));
+    return { sort: sort, max: max === 500 || max === 1000 ? max : 0 };
+  }
+  function apply(st) {
+    cells.slice().sort(KEYS[st.sort]).forEach(function (c) { grid.appendChild(c); });
+    var shown = 0;
+    cells.forEach(function (c) { var ok = !st.max || Number(c.dataset.price) <= st.max; c.hidden = !ok; if (ok) shown++; });
+    count.textContent = String(shown);
+    none.hidden = shown > 0;
+    document.querySelectorAll('[data-sort]').forEach(function (a) {
+      var on = a.getAttribute('data-sort') === st.sort;
+      a.classList.toggle('on', on);
+      if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+    });
+    document.querySelectorAll('[data-max]').forEach(function (a) {
+      var on = Number(a.getAttribute('data-max')) === st.max;
+      a.classList.toggle('on', on);
+      a.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  function write(st) {
+    var u = new URLSearchParams(location.search);
+    if (st.sort === 'off') u.delete('sort'); else u.set('sort', st.sort);
+    if (st.max) u.set('max', String(st.max)); else u.delete('max');
+    var q = u.toString();
+    history.replaceState(null, '', location.pathname + (q ? '?' + q : '') + location.hash);
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest && e.target.closest('[data-sort], [data-max]');
+    if (!t) return;
+    e.preventDefault();
+    var st = read();
+    if (t.hasAttribute('data-sort')) st.sort = t.getAttribute('data-sort');
+    else { var m = Number(t.getAttribute('data-max')); st.max = st.max === m ? 0 : m; }
+    write(st);
+    apply(st);
+  });
+  apply(read());
+})();`;
 ---
 
 <Base
   title="セール"
-  description="期間限定のセール対象になっている作品を並べています。"
+  description="期間限定のセール対象になっている作品を、割引率・価格・評価・新しさで並べ替えて見られます。"
   dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
 >
-  <section class="section">
+  <Breadcrumb items={[{ href: '/', label: 'トップ' }, { label: 'セール' }]} />
+  <section class="section" style="margin-top: 8px">
     <h1>セール中</h1>
     {
-      works.length > 0 && (
-        <p class="muted">セール対象の作品 {total}件（配信開始日の新しい順{total > works.length ? `、ここでは新しい${works.length}件` : ''}）。価格とセール期間はデータ更新時点の情報です。最新の内容は販売ページで確認してください。</p>
+      items.length > 0 && (
+        <p class="muted">セール対象の作品 <span class="nowrap">{total}件</span>{total > items.length ? `（ここでは割引率の高い${items.length}件）` : ''}。価格とセール期間はデータ更新時点の情報です。最新の内容は販売ページで確認してください。</p>
       )
     }
   </section>
 
-  <section class="section">
-    <WorkGrid works={works} empty="現在セール中の作品はありません。" />
-    {total > works.length && (
-      <p style="margin-top: 16px"><a class="btn" href="/explore/?sale=1">探索ページでセール中の全件を見る（{total}件）</a></p>
-    )}
-  </section>
+  {
+    items.length === 0 ? (
+      <div class="empty"><p>現在セール中の作品はありません。</p></div>
+    ) : (
+      <section class="section">
+        <div class="sale-tools">
+          <nav class="chips" aria-label="並べ替え">
+            {SORTS.map((s, i) => (
+              <a class:list={['chip', { on: i === 0 }]} href={i === 0 ? '/sale/' : `/sale/?sort=${s.key}`} data-sort={s.key} aria-current={i === 0 ? 'true' : undefined}>{s.label}</a>
+            ))}
+          </nav>
+          <div class="chips" role="group" aria-label="価格帯">
+            {BANDS.map((b) => (
+              <a class="chip" href={`/sale/?max=${b.max}`} data-max={b.max} aria-pressed="false">{b.label}</a>
+            ))}
+          </div>
+          <p class="count"><b id="sale-count">{items.length}</b>件</p>
+        </div>
+        <div class="grid" id="sale-grid">
+          {items.map((it, i) => (
+            <div data-off={it.off} data-price={it.price} data-rating={it.rating.toFixed(4)} data-date={it.date}>
+              <WorkCard work={toCard(it.w, { omitLabels: ['セール中'] })} eager={i < 4} />
+            </div>
+          ))}
+        </div>
+        <div class="empty" id="sale-none" hidden><p>この価格帯のセール作品はありません。</p></div>
+        {total > items.length && (
+          <p style="margin-top: 16px"><a class="btn" href="/explore/?sale=1">探索ページでセール中の全件を見る（{total}件）</a></p>
+        )}
+      </section>
+    )
+  }
 
   <AdSlot name="sale-bottom" />
+  {items.length > 0 && <script is:inline set:html={SCRIPT} />}
 </Base>
+
+<style is:global>
+  /* is:global にする理由: 全要素に属性が付くのを避ける。.sale-tools はこのページだけ */
+  .sale-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp) calc(var(--sp) * 2); margin-bottom: calc(var(--sp) * 3); padding-bottom: calc(var(--sp) * 1.5); border-bottom: 1px solid var(--line-strong); }
+  .sale-tools .chip { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; }
+  .sale-tools .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .sale-tools .count { margin-left: auto; white-space: nowrap; }
+</style>

@@ -1,8 +1,9 @@
 ---
 // ランキング。meta.rankings の3種類（評価順・人気順・新着順）を各30件。
-// 切り替えはページ内アンカーのリンクだけで行う（JS不要）。
+// 切り替えはページ内アンカーのリンクだけで行う（JS不要）。各カードに順位の数字（.rank-no）を付ける（第三者レビュー B-13）。
 import Base from '../layouts/Base.astro';
 import AdSlot from '../components/AdSlot.astro';
+import Breadcrumb from '../components/Breadcrumb.astro';
 import WorkGrid from '../components/WorkGrid.astro';
 import { loadCatalog } from '../lib/catalog.ts';
 import type { CatalogWork } from '../lib/catalog.ts';
@@ -36,9 +37,10 @@ const tabs = rankings
   description="評価順・人気順・新着順の作品ランキングです。"
   dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
 >
-  <section class="section">
+  <Breadcrumb items={[{ href: '/', label: 'トップ' }, { label: 'ランキング' }]} />
+  <section class="section" style="margin-top: 8px">
     <h1>ランキング</h1>
-    <p><a href="/ranking/actress/">出演者ランキングを見る</a></p>
+    <p><a class="more-link" href="/ranking/actress/">出演者ランキングを見る</a></p>
   </section>
 
   {
@@ -65,7 +67,7 @@ const tabs = rankings
             <div class="section-head">
               <h2>{t.label}<span class="muted" style="margin-left: 8px">{t.note}</span></h2>
             </div>
-            <WorkGrid works={t.works} empty="この順位の作品はまだありません。" />
+            <WorkGrid works={t.works} empty="この順位の作品はまだありません。" rankFrom={1} eager={t.id === 'rating' ? 4 : 0} />
           </section>
         ))}
       </>

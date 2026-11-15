@@ -3,6 +3,7 @@
 import '../../styles/actress.css';
 import Base from '../../layouts/Base.astro';
 import AdSlot from '../../components/AdSlot.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
 import { loadCatalog } from '../../lib/catalog.ts';
 import { actressStats, rankActresses, globalMeanAvg, workBayes } from '../../lib/actress-stats.ts';
 
@@ -23,7 +24,8 @@ const rows = ranked.map((s) => {
   description="レビューの平均と件数、作品数から機械的に順位を付けた出演者ランキングです。"
   dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
 >
-  <section class="section">
+  <Breadcrumb items={[{ href: '/', label: 'トップ' }, { href: '/ranking/', label: 'ランキング' }, { label: '出演者ランキング' }]} />
+  <section class="section" style="margin-top: 8px">
     <h1>出演者ランキング</h1>
     <div class="editorial">
       <!-- TODO: 運営者が記入 -->

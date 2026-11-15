@@ -1,11 +1,16 @@
 ---
 // 軸ページ（出演者・シリーズ・メーカー・ジャンル）共通の本体。
-// works は配信開始日の降順で渡される前提（catalog の索引がその順）。先頭60件だけ並べ、残りは探索ページへ誘導する。
+// works は配信開始日の降順で渡される前提（catalog の索引がその順）。PER_PAGE 件ずつページ送りにする
+// （1ページ目は /{kind}/{id}/、2ページ目以降は /{kind}/{id}/page/{n}/。各ページの canonical は自分自身。第三者レビュー C-12）。
+// 作品が3本未満のシリーズ・メーカーは noindex（sitemap からも外す。astro.config.mjs。第三者レビュー C-3）。
 import Base from '../layouts/Base.astro';
 import AdSlot from './AdSlot.astro';
+import Breadcrumb from './Breadcrumb.astro';
 import WorkGrid from './WorkGrid.astro';
 import { loadCatalog } from '../lib/catalog.ts';
 import type { CatalogWork } from '../lib/catalog.ts';
+import { fmtDate } from '../lib/format.ts';
+import { AXIS_PER_PAGE } from '../lib/card.ts';
 
 type Kind = 'actress' | 'series' | 'maker' | 'genre';
 
@@ -14,12 +19,14 @@ interface Props {
   id: string;
   name: string;
   works: CatalogWork[];
+  /** 何ページ目か（1から）。既定 1 */
+  page?: number;
 }
 
-const { kind, id, name, works } = Astro.props;
+const { kind, id, name, works, page = 1 } = Astro.props;
 const catalog = loadCatalog();
 
-const MAX_WORKS = 60; // 軸ページに並べる作品の上限
+const PER_PAGE = AXIS_PER_PAGE; // 1ページに並べる作品数（ページ送りの単位。lib/card.ts）
 const MAX_RELATED = 8; // 関連する軸の各グループの上限
 
 // 軸ごとの表示名と、探索ページのクエリのキー（値は名前）。ページのパスは kind と同じ（/actress/ など）
@@ -80,35 +87,55 @@ function relatedGroups(): Group[] {
 
 const label = LABEL[kind];
 const total = works.length;
-const shown = works.slice(0, MAX_WORKS);
+const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+const shown = works.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 const exploreHref = `/explore/?${QUERY[kind]}=${encodeURIComponent(name)}`;
 const groups = relatedGroups();
+const baseHref = `/${kind}/${encodeURIComponent(id)}/`;
+const pageHref = (n: number) => (n <= 1 ? baseHref : `${baseHref}page/${n}/`);
+const noindex = (kind === 'series' || kind === 'maker' || kind === 'actress') && total < 3;
+
+// title と description にページごとに変わる数値（作品数・平均評価・最新の配信日）を入れる（第三者レビュー C-13）
+let sum = 0, reviews = 0;
+for (const w of works) if (w.reviewAvg !== null && w.reviewCount > 0) { sum += w.reviewAvg * w.reviewCount; reviews += w.reviewCount; }
+const latest = fmtDate(works[0]?.releasedAt ?? null);
+const pageNote = page > 1 ? `（${page}ページ目）` : '';
+const title = `${name}のおすすめ作品・新作一覧（${total}本）${pageNote}`;
+const description = [
+  `${label}「${name}」の作品${total}本を、配信開始日の新しい順に並べています${pageNote}。`,
+  reviews > 0 ? `平均評価は${(sum / reviews).toFixed(2)}（レビュー${reviews}件）。` : '',
+  latest ? `最新の配信日は${latest}です。` : '',
+].join('');
+const crumbs = [
+  { href: '/', label: 'トップ' },
+  { href: `/${kind}/`, label: `${label}一覧` },
+  ...(page > 1 ? [{ href: baseHref, label: name }, { label: `${page}ページ目` }] : [{ label: name }]),
+];
 ---
 
-<Base
-  title={`${name}（${label}）`}
-  description={`${label}「${name}」の作品${total}件を、配信開始日の新しい順に並べています。`}
-  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
->
-  <nav class="crumb" aria-label="パンくず">
-    <a href="/">トップ</a><span aria-hidden="true"> / </span><a href="/explore/">探索</a><span aria-hidden="true"> / </span><span aria-current="page">{label}: {name}</span>
-  </nav>
+<Base title={title} description={description} noindex={noindex} dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}>
+  <Breadcrumb items={crumbs} />
 
-  <section class="section" style="margin-top: 16px">
+  <section class="section axis-page" style="margin-top: 8px">
     <div class="muted">{label}</div>
     <h1>{name}</h1>
-    <p class="muted">作品 {total}件（配信開始日の新しい順）</p>
+    <p class="muted">作品 <span class="nowrap">{total}本</span>（配信開始日の新しい順{pages > 1 ? `、${page} / ${pages}ページ` : ''}）{latest && <>。最新の配信日 <span class="nowrap">{latest}</span></>}</p>
   </section>
 
   <section class="section">
-    <WorkGrid works={shown} empty="この軸に該当する作品はまだありません。" />
+    <WorkGrid works={shown} empty="この軸に該当する作品はまだありません。" eager={page === 1 ? 4 : 2} />
     {
-      total > MAX_WORKS && (
-        <p style="margin-top: 16px">
-          <a class="btn" href={exploreHref}>探索ページで全件を見る（{total}件）</a>
-        </p>
+      pages > 1 && (
+        <nav class="pager" aria-label="ページ送り">
+          {page > 1 && <a class="btn" href={pageHref(page - 1)} rel="prev">‹ 前へ</a>}
+          {Array.from({ length: pages }, (_, k) => k + 1).map((n) =>
+            n === page ? <span class="btn on" aria-current="page">{n}</span> : <a class="btn" href={pageHref(n)}>{n}</a>,
+          )}
+          {page < pages && <a class="btn" href={pageHref(page + 1)} rel="next">次へ ›</a>}
+        </nav>
       )
     }
+    <p style="margin-top: 16px"><a class="more-link" href={exploreHref}>探索ページで条件を足して絞り込む</a></p>
   </section>
 
   {

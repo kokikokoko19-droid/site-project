@@ -1,0 +1,66 @@
+---
+// ジャンル・メーカー・シリーズの一覧ページ（/genre/ /maker/ /series/）の本体（第三者レビュー A C2・C-12）。
+// 作品数の多い順。各行に作品数と最新の配信日。ジャンルは上位 big 件を大きく並べ、残りを全件リストにする。
+import Base from '../layouts/Base.astro';
+import Breadcrumb from './Breadcrumb.astro';
+import { loadCatalog } from '../lib/catalog.ts';
+import { fmtDate } from '../lib/format.ts';
+
+type Kind = 'genre' | 'maker' | 'series';
+interface Props {
+  kind: Kind;
+  /** 上位を大きく並べる件数（0 なら全件をリストで） */
+  big?: number;
+}
+const { kind, big = 0 } = Astro.props;
+const catalog = loadCatalog();
+const LABEL: Record<Kind, string> = { genre: 'ジャンル', maker: 'メーカー', series: 'シリーズ' };
+const INDEX = { genre: catalog.byGenre, maker: catalog.byMaker, series: catalog.bySeries }[kind];
+const label = LABEL[kind];
+
+const rows = [...INDEX]
+  .map(([id, works]) => ({ id, name: (catalog.refNames[kind].get(id) ?? '').trim(), n: works.length, latest: fmtDate(works[0]?.releasedAt ?? null) }))
+  .filter((r) => r.name !== '')
+  .sort((a, b) => b.n - a.n || (a.latest < b.latest ? 1 : a.latest > b.latest ? -1 : a.name.localeCompare(b.name, 'ja')));
+const top = rows.slice(0, big);
+const rest = big > 0 ? rows.slice(big) : rows;
+const href = (id: string) => `/${kind}/${encodeURIComponent(id)}/`;
+---
+
+<Base
+  title={`${label}一覧（${rows.length}件）`}
+  description={`掲載中の${label}${rows.length}件を、作品数の多い順に並べています。各${label}の作品数と最新の配信日つき。`}
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  <Breadcrumb items={[{ href: '/', label: 'トップ' }, { label: `${label}一覧` }]} />
+  <section class="section list-page" style="margin-top: 8px">
+    <h1>{label}一覧</h1>
+    <p class="muted">掲載中の{label} <span class="nowrap">{rows.length}件</span>。作品数の多い順に並べています。</p>
+  </section>
+
+  {rows.length === 0 && <div class="empty"><p>{label}のデータを準備中です。</p></div>}
+
+  {
+    top.length > 0 && (
+      <section class="section">
+        <div class="section-head"><h2>作品の多い{label}</h2><span class="sub nowrap">上位{top.length}件</span></div>
+        <div class="tag-cloud">
+          {top.map((r) => <a href={href(r.id)}>{r.name}<span class="n">{r.n}本</span></a>)}
+        </div>
+      </section>
+    )
+  }
+
+  {
+    rest.length > 0 && (
+      <section class="section">
+        <div class="section-head"><h2>{top.length > 0 ? `すべての${label}` : `${label}の一覧`}</h2><span class="sub nowrap">{top.length > 0 ? `残り${rest.length}件` : `${rest.length}件`}</span></div>
+        <ol class="axis-index">
+          {rest.map((r) => (
+            <li><a href={href(r.id)}><span class="nm">{r.name}</span><span class="n">{r.n}本</span>{r.latest && <span class="d">最新 {r.latest}</span>}</a></li>
+          ))}
+        </ol>
+      </section>
+    )
+  }
+</Base>

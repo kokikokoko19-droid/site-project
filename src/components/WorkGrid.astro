@@ -1,6 +1,7 @@
 ---
 // 作品カードの格子。作品の配列を受け取り、WorkCard の表示形に直して .grid に並べる。
 // 文言は自動文（データ駆動テンプレ）だけで、公式の紹介文やレビュー本文は使わない。
+import type { DerivedLabel } from '../data/types.ts';
 import type { CatalogWork } from '../lib/catalog.ts';
 import { toCard } from '../lib/card.ts';
 import WorkCard from './WorkCard.astro';
@@ -9,19 +10,25 @@ interface Props {
   works: CatalogWork[];
   /** 作品が0件のときに出す文言 */
   empty?: string;
+  /** カードに出さないラベル（例: セール一覧では「セール中」） */
+  omitLabels?: DerivedLabel[];
+  /** 指定すると、各カードに順位（rankFrom から1ずつ増やす）を付ける */
+  rankFrom?: number;
+  /** 先頭の何枚を遅延読み込みしないか（画面の最初に見える分。既定 4） */
+  eager?: number;
 }
 
-const { works, empty = '該当する作品がありません。' } = Astro.props;
+const { works, empty = '該当する作品がありません。', omitLabels = [], rankFrom, eager = 4 } = Astro.props;
 
 // データ層の Work から、カードに必要な項目だけを取り出す（対応は lib/card.ts の toCard）
-const cards = works.map((w) => ({ work: toCard(w), href: `/v/${w.contentId}/` }));
+const cards = works.map((w) => ({ work: toCard(w, { omitLabels }), href: `/v/${w.contentId}/` }));
 ---
 
 {
   cards.length > 0 ? (
     <div class="grid">
-      {cards.map((c) => (
-        <WorkCard work={c.work} href={c.href} />
+      {cards.map((c, i) => (
+        <WorkCard work={c.work} href={c.href} rank={rankFrom !== undefined ? rankFrom + i : undefined} eager={i < eager} />
       ))}
     </div>
   ) : (
@@ -51,5 +58,6 @@ const cards = works.map((w) => ({ work: toCard(w), href: `/v/${w.contentId}/` })
   a.chip .n {
     margin-left: 6px;
     color: var(--fg2);
+    white-space: nowrap;
   }
 </style>

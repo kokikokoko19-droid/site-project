@@ -1,11 +1,12 @@
 /**
- * データ駆動の自動文（docs/02 5.1）。作品ページ・カード・X投稿の3種類を、API項目の組み立てだけで作る。
+ * データ駆動の自動文（docs/02 5.1）。作品ページ・要約（meta description 用）・カード・X投稿の4種類を、API項目の組み立てだけで作る。
  * 描写は加えない。ジャンル名などは API の値をそのまま並べる。
  * 欠けた項目は句ごと省き、「不明」などの代替表示は出さない。
- * 文型は各5種類で、contentId のハッシュで選ぶ（同じ作品は常に同じ文）。
+ * 文型は contentId のハッシュで選ぶ（同じ作品は常に同じ文）。作品ページは3種類、ほかは各5種類。
+ * 作品ページの本文（pageText）は、仕様表と同じ値を繰り返さないよう「この作品の位置づけ」の1〜2文に留める（第三者レビュー A I10）。
  */
 import type { DerivedLabel } from '../data/types.ts';
-import type { CatalogWork } from './catalog.ts';
+import type { Catalog, CatalogWork } from './catalog.ts';
 import { fmtDate, minutes, yen } from './format.ts';
 
 const PAGE_NAMES = 8;     // 作品ページで列挙する出演者名の上限（超えたら「ほか」）
@@ -104,13 +105,39 @@ function fromClause(f: Facts): string {
 /** 「{主語…}で、{n}分」。主語が無ければ「収録{n}分」 */
 const withMin = (s: string, min: string): string => (s && min ? `${s}で、${min}` : s || (min ? `収録${min}` : ''));
 
-/** 作品ページ用（5文型）。各文型は「句点を付ける前の文」の配列を返す。作品ページは3〜4文に、ラベル文と価格文が付く */
-const PAGE: ((f: Facts) => string[])[] = [
+/** 要約用（5文型。meta description に使う）。各文型は「句点を付ける前の文」の配列を返す。3〜4文に、ラベル文と価格文が付く */
+const SUMMARY: ((f: Facts) => string[])[] = [
   (f) => [lead(f, PAGE_NAMES), list(f.min, when(f)), genre(f, 'ジャンルは'), review(f), f.note],
   (f) => [list(when(f), f.min), lead(f, PAGE_NAMES), review(f), genre(f, 'ジャンルは'), priceLine(f), f.note],
   (f) => [fromClause(f), review(f), genre(f, 'タグは'), f.note, priceLine(f)],
   (f) => [subject(f, PAGE_NAMES), list(f.min && `収録${f.min}`, when(f), f.series && `${f.series}の1本`), f.note, genre(f, 'ジャンルは'), review(f)],
   (f) => [genre(f, 'ジャンルは'), withMin(lead(f, PAGE_NAMES), f.min), priceLine(f), review(f), f.note],
+];
+/**
+ * 作品ページの本文に使う、カタログの中での位置。v/[id].astro が positionOf で求めて渡す。
+ * nth は配信の古い順に数えた番号（当サイトの掲載分の中で）。ratingTop はレビュー5件以上の掲載作品の中での上位の割合（%）
+ */
+export type PageContext = {
+  series?: { name: string; nth: number; total: number } | null;
+  actress?: { name: string; nth: number; total: number } | null;
+  ratingTop?: number | null;
+};
+/** 位置づけの句（「シリーズ01の3本目、出演者Aの出演作の5本目」）。数えられるものが無ければ '' */
+function position(ctx: PageContext): string {
+  const s = ctx.series && ctx.series.total >= 2 && clean(ctx.series.name) ? `${clean(ctx.series.name)}の${ctx.series.nth}本目` : '';
+  const a = ctx.actress && ctx.actress.total >= 2 && clean(ctx.actress.name) ? `${clean(ctx.actress.name)}の出演作の${ctx.actress.nth}本目` : '';
+  return list(s, a);
+}
+/** 評価の位置の句。上位30%以内のときだけ */
+const ratingClause = (ctx: PageContext): string =>
+  typeof ctx.ratingTop === 'number' && ctx.ratingTop >= 1 && ctx.ratingTop <= 30
+    ? `レビュー評価は、レビュー5件以上の掲載作品の中で上位${Math.round(ctx.ratingTop)}%に入ります`
+    : '';
+/** 作品ページ用（3文型）。1文目は位置づけ（数えられなければ出演者とメーカー）、2文目は評価の位置かラベル句 */
+const PAGE: ((f: Facts, ctx: PageContext) => string[])[] = [
+  (f, c) => [position(c) ? `当サイトの掲載分では、${position(c)}にあたる作品です` : lead(f, PAGE_NAMES), ratingClause(c) || f.note],
+  (f, c) => [position(c) ? `配信順に数えると${position(c)}です（当サイトの掲載分で数えています）` : lead(f, PAGE_NAMES), ratingClause(c) || f.note],
+  (f, c) => [position(c) ? `${position(c)}として配信された作品です（当サイトの掲載分で数えています）` : lead(f, PAGE_NAMES), ratingClause(c) || f.note],
 ];
 /** カード用（5文型）。「・」でつなぐ短い1文 */
 const CARD: ((f: Facts) => string[])[] = [
@@ -129,10 +156,10 @@ const POST: ((f: Facts, q: string) => string[])[] = [
   (f, q) => [cat(q, f.min), subject(f, POST_NAMES), genre(f, 'ジャンルは', 3)],
 ];
 
-export const VARIANT_COUNT = { page: PAGE.length, card: CARD.length, post: POST.length } as const;
-const SALT = { page: '', card: 'c', post: 'p' } as const;
+export const VARIANT_COUNT = { page: PAGE.length, summary: SUMMARY.length, card: CARD.length, post: POST.length } as const;
+const SALT = { page: 'v', summary: '', card: 'c', post: 'p' } as const;
 
-/** 文型の番号（0〜4）。contentId のハッシュで選ぶ。カードは contentId + 'c'、X投稿は + 'p' を使い、用途ごとに選びを分ける */
+/** 文型の番号。contentId のハッシュで選ぶ。作品ページは contentId + 'v'、要約はそのまま、カードは + 'c'、X投稿は + 'p' を使い、用途ごとに選びを分ける */
 export function variantOf(contentId: string, kind: keyof typeof VARIANT_COUNT): number {
   return hash(contentId + SALT[kind]) % VARIANT_COUNT[kind];
 }
@@ -164,8 +191,12 @@ function fitPost(make: (title: string) => string, title: string): string {
 }
 
 /** 作品ページ用の文を、文型の番号を指定して作る（テスト用。通常は pageText） */
-export function renderPage(w: CatalogWork, variant: number): string {
-  return finish(pickOf(PAGE, variant)(facts(w)));
+export function renderPage(w: CatalogWork, variant: number, ctx: PageContext = {}): string {
+  return finish(pickOf(PAGE, variant)(facts(w), ctx));
+}
+/** 要約の文を、文型の番号を指定して作る（テスト用。通常は summaryText） */
+export function renderSummary(w: CatalogWork, variant: number): string {
+  return finish(pickOf(SUMMARY, variant)(facts(w)));
 }
 export function renderCard(w: CatalogWork, variant: number): string {
   return pickOf(CARD, variant)(facts(w)).filter((p) => p !== '').join('・');
@@ -175,9 +206,45 @@ export function renderPost(w: CatalogWork, variant: number): string {
   return `${fitPost((title) => finish(make(f, title ? `「${title}」` : '')), f.title) || '作品情報。'}${POST_TAG}`;
 }
 
-/** 作品ページ用（3〜4文＋ラベル文）。項目が全て欠けたときは空文字 */
-export function pageText(w: CatalogWork): string {
-  return renderPage(w, variantOf(w.contentId, 'page'));
+/** 作品ページの本文（位置づけの1〜2文）。項目が全て欠けたときは空文字 */
+export function pageText(w: CatalogWork, ctx: PageContext = {}): string {
+  return renderPage(w, variantOf(w.contentId, 'page'), ctx);
+}
+/** 要約（3〜4文＋ラベル文。meta description 用）。項目が全て欠けたときは空文字 */
+export function summaryText(w: CatalogWork): string {
+  return renderSummary(w, variantOf(w.contentId, 'summary'));
+}
+
+const RATED_MIN = 5; // 評価の位置を数える対象（レビュー件数がこれ以上の作品）
+const ratedCache = new WeakMap<Catalog, number[]>();
+/** 配信の古い順の番号。日付の無い作品は数えない（null） */
+function nthOf(list: readonly CatalogWork[] | undefined, w: CatalogWork): { nth: number; total: number } | null {
+  if (!list || !/^\d{4}-\d{2}-\d{2}/.test(w.releasedAt ?? '')) return null;
+  const i = list.indexOf(w); // 索引は配信開始日の降順
+  return i < 0 ? null : { nth: list.length - i, total: list.length };
+}
+/** 作品ページの本文に渡す位置（PageContext）をカタログから求める。シリーズと出演者は先頭の1つで数える */
+export function positionOf(catalog: Catalog, w: CatalogWork): PageContext {
+  const s = w.series.find((r) => r.id && clean(r.name));
+  const a = w.actresses.find((r) => r.id && clean(r.name));
+  const sn = s ? nthOf(catalog.bySeries.get(s.id), w) : null;
+  const an = a ? nthOf(catalog.byActress.get(a.id), w) : null;
+  let ratingTop: number | null = null;
+  if (w.reviewCount >= RATED_MIN && typeof w.reviewAvg === 'number' && Number.isFinite(w.reviewAvg)) {
+    let avgs = ratedCache.get(catalog);
+    if (!avgs) {
+      avgs = catalog.works.filter((x) => x.reviewCount >= RATED_MIN && typeof x.reviewAvg === 'number' && Number.isFinite(x.reviewAvg)).map((x) => x.reviewAvg as number);
+      ratedCache.set(catalog, avgs);
+    }
+    const higher = avgs.filter((v) => v > (w.reviewAvg as number)).length;
+    // 対象が少ないと割合に意味が無いので、20件以上あるときだけ出す。上位の割合は切り上げ（1%未満も1%）
+    if (avgs.length >= 20) ratingTop = Math.max(1, Math.ceil(((higher + 1) / avgs.length) * 100));
+  }
+  return {
+    series: s && sn ? { name: s.name, ...sn } : null,
+    actress: a && an ? { name: a.name, ...an } : null,
+    ratingTop,
+  };
 }
 /** カード用（1文）。選んだ文型の項目が全て欠けたときは、次の文型に順に替える。どれも空なら空文字 */
 export function cardText(w: CatalogWork): string {

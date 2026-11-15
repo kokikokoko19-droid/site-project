@@ -1,0 +1,75 @@
+---
+// 出演者一覧（/actress/）。五十音の行ごとに、作品数の多い順で並べる（第三者レビュー A C2）。
+// 各行に作品数と最新の配信日。作品が1本だけの出演者は、行ごとに「その他」としてまとめて折りたたむ。
+// 読みは出演者プロフィールのふりがな（無ければ名前）の先頭で決め、かなで始まらないものは「英数ほか」に入れる。
+import Base from '../../layouts/Base.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+import { loadCatalog } from '../../lib/catalog.ts';
+import { KANA_ROWS, fmtDate, kanaRow } from '../../lib/format.ts';
+
+const catalog = loadCatalog();
+type Row = { id: string; name: string; n: number; latest: string };
+const OTHER = '英数ほか';
+const rows = new Map<string, Row[]>([...KANA_ROWS, OTHER].map((k) => [k, []]));
+for (const [id, works] of catalog.byActress) {
+  const name = (catalog.refNames.actress.get(id) ?? '').trim();
+  if (!name) continue;
+  const reading = catalog.actressProfiles.get(id)?.ruby ?? name;
+  rows.get(kanaRow(reading) ?? kanaRow(name) ?? OTHER)!.push({ id, name, n: works.length, latest: fmtDate(works[0]?.releasedAt ?? null) });
+}
+// 作品数の多い順。同数は最新の配信日が新しい順、さらに名前順
+const order = (a: Row, b: Row) => b.n - a.n || (a.latest < b.latest ? 1 : a.latest > b.latest ? -1 : a.name.localeCompare(b.name, 'ja'));
+const groups = [...rows]
+  .map(([key, list]) => ({ key, label: key === OTHER ? OTHER : `${key}行`, main: list.filter((r) => r.n >= 2).sort(order), singles: list.filter((r) => r.n < 2).sort(order) }))
+  .filter((g) => g.main.length + g.singles.length > 0);
+const total = groups.reduce((s, g) => s + g.main.length + g.singles.length, 0);
+const anchor = (key: string) => `row-${key === OTHER ? 'other' : encodeURIComponent(key)}`;
+---
+
+<Base
+  title={`出演者一覧（${total}人）`}
+  description={`掲載中の出演者${total}人を、五十音の行ごとに作品数の多い順で並べています。各出演者の作品数と最新の配信日つき。`}
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  <Breadcrumb items={[{ href: '/', label: 'トップ' }, { label: '出演者一覧' }]} />
+  <section class="section list-page" style="margin-top: 8px">
+    <h1>出演者一覧</h1>
+    <p class="muted">掲載中の出演者 <span class="nowrap">{total}人</span>。五十音の行ごとに、作品数の多い順に並べています。</p>
+    {
+      groups.length > 0 && (
+        <nav class="row-tabs" aria-label="五十音の行">
+          {groups.map((g) => <a class="chip" href={`#${anchor(g.key)}`}>{g.label}</a>)}
+        </nav>
+      )
+    }
+  </section>
+
+  {
+    groups.length === 0 ? (
+      <div class="empty"><p>出演者のデータを準備中です。</p></div>
+    ) : (
+      groups.map((g) => (
+        <section class="section list-group" id={anchor(g.key)}>
+          <div class="section-head"><h2>{g.label}</h2><span class="sub nowrap">{g.main.length + g.singles.length}人</span></div>
+          {g.main.length > 0 && (
+            <ol class="axis-index">
+              {g.main.map((r) => (
+                <li><a href={`/actress/${encodeURIComponent(r.id)}/`}><span class="nm">{r.name}</span><span class="n">{r.n}本</span>{r.latest && <span class="d">最新 {r.latest}</span>}</a></li>
+              ))}
+            </ol>
+          )}
+          {g.singles.length > 0 && (
+            <details class="axis-more">
+              <summary>その他（作品1本の出演者 {g.singles.length}人）</summary>
+              <ol class="axis-index">
+                {g.singles.map((r) => (
+                  <li><a href={`/actress/${encodeURIComponent(r.id)}/`}><span class="nm">{r.name}</span><span class="n">{r.n}本</span>{r.latest && <span class="d">最新 {r.latest}</span>}</a></li>
+                ))}
+              </ol>
+            </details>
+          )}
+        </section>
+      ))
+    )
+  }
+</Base>

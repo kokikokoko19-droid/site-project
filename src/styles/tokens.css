@@ -21,8 +21,11 @@
   --fs-b: 15px;
   --fs-s: 12.5px;
   --font-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
-  --font-title: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;  /* 可変の見出し（作品名・出演者名など）。Web フォントを含まない */
+  /* 作品名・人名などの可変の見出し。Web フォントを含めず、端末の明朝に任せる */
+  --font-title: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
   --font: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
   --maxw: 1200px;
+  --cover-w: 160px;          /* 縦長の表紙（公式の一覧用 147×200）を出す最大の幅。これ以上は引き伸ばさない */
+  --cover-w-lg: 148px;       /* 横長の行（出演者ページの上位3件）に置く表紙の幅 */
   color-scheme: dark;
 }
