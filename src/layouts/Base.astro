@@ -125,7 +125,8 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
     <meta name="rating" content="adult" />
     {/* 既定は index。中継ページなど載せたくないページだけ noindex を指定する。
         仮公開（公開前の国内確認）の間は PUBLIC_NOINDEX=1 で全ページを noindex にする */}
-    {(noindex || siteNoindex) && <meta name="robots" content="noindex, nofollow" />}
+    {/* 薄いページや仮公開では noindex にするが、リンク先は辿らせる（follow）。/go/ は Base を使わず別に nofollow */}
+    {(noindex || siteNoindex) && <meta name="robots" content="noindex, follow" />}
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content={ogType} />
