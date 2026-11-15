@@ -83,7 +83,7 @@ test('exportAll: 出演者 id 指定で、その出演者が出る作品がす�
   assert.deepEqual(r, { works: 2, chunks: 1, blocked: 2 });
   assert.deepEqual(read(dir, 'works.json').map((w: { contentId: string }) => w.contentId), ['t-003', 't-004']);
   assert.deepEqual(read(dir, 'meta.json').rankings.byPopularity, []);
-  assert.ok(!read(dir, 'index.json').actresses.includes('出演者12')); // 同じ作品に出る別の出演者も、作品ごと消える
+  assert.ok(!read(dir, 'index.json').names.actress.includes('出演者12')); // 同じ作品に出る別の出演者も、作品ごと消える
   assert.deepEqual(read(dir, 'actresses.json').map((a: { id: string }) => a.id), ['13']);
 }));
 

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createClient, resolveMaxOffset } from '../src/data/api.ts';
 import { openDb } from '../src/data/db.ts';
 import type { Db } from '../src/data/db.ts';
-import { ingestRanked, ingestRecent, ingestSynthetic, ingestWindow, refreshExisting } from '../src/data/ingest.ts';
+import { DEFAULT_REFRESH_LIMIT, ingestRanked, ingestRecent, ingestSynthetic, ingestWindow, refreshExisting } from '../src/data/ingest.ts';
 import type { IngestProgress } from '../src/data/ingest.ts';
 import { MAX_OFFSET } from '../src/data/ingest-windows.ts';
 import { normalizeItems } from '../src/data/normalize.ts';
@@ -251,4 +251,24 @@ test('api の検証: offset は 1 以上 上限以下（既定 5000）。maxOffs
   const old = createClient({ ...CLIENT_OPTS, maxOffset: 50000, fetchImpl: (async () => new Response(JSON.stringify({ result: { status: 200, result_count: 0, total_count: 0 } }))) as typeof fetch });
   await old.itemList({ offset: 50000 });
   await assert.rejects(() => old.itemList({ offset: 50001 }), RangeError);
+});
+
+test('refreshExisting: fetchedAt の古い順に limit 件だけ確認する（同じ日時なら content_id 昇順）', async () => {
+  const db = openDb(':memory:');
+  const at = (ids: string[], fetchedAt: string) => db.upsertWorks(normalizeItems(ids.map((content_id) => ({ content_id, title: `旧-${content_id}` })), { fetchedAt }));
+  at(['t-001', 't-002'], '2026-10-20T00:00:00.000Z');
+  at(['t-004', 't-003'], '2026-10-01T00:00:00.000Z');
+  at(['t-005'], '2026-10-10T00:00:00.000Z');
+  const { client, urls } = setup(refreshApi());
+  assert.deepEqual(await refreshExisting(client, db, { limit: 3 }), { checked: 3, updated: 3, gone: 0 });
+  assert.deepEqual(urls.map((u) => u.searchParams.get('cid')), ['t-003', 't-004', 't-005']);
+});
+
+test('refreshExisting: limit を省くと既定の上限（DEFAULT_REFRESH_LIMIT 件）で止まる', async () => {
+  const db = openDb(':memory:');
+  seed(db, Array.from({ length: DEFAULT_REFRESH_LIMIT + 5 }, (_, i) => `t-${String(i).padStart(5, '0')}`));
+  const { client, urls } = setup(refreshApi());
+  assert.equal((await refreshExisting(client, db)).checked, DEFAULT_REFRESH_LIMIT);
+  assert.equal(urls.length, DEFAULT_REFRESH_LIMIT);
+  assert.equal(db.countWorks('active'), DEFAULT_REFRESH_LIMIT + 5); // 確認しなかった作品は gone にならない
 });

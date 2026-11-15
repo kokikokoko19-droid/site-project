@@ -37,3 +37,72 @@
 
 /* 該当なしの枠は hidden 属性で出し入れする。common.css の .empty { display: grid } に負けないようにする */
 .empty[hidden] { display: none; }
+
+/* ---- 作り直し（2026-11）: 並べ替えのプリセット・目的別チップ・スマホのシート ---- */
+
+/* 題名の書体（tokens.css の --font-title。無い環境でも同じ書体になるよう、既定値を添える） */
+#modal-title { font-family: var(--font-title, "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif); }
+
+/* 結果欄の上の部品。高さを固定して、JS の反映で下の結果が動かないようにする */
+.results-col { min-width: 0; display: grid; gap: calc(var(--sp) * 1.5); align-content: start; }
+.purpose { gap: var(--sp); }
+.purpose .chip { min-height: 40px; }
+.tools { display: flex; align-items: center; gap: var(--sp); flex-wrap: wrap; }
+.sort-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-s); color: var(--fg1); }
+.sort-select { min-height: 44px; width: 10em; background: var(--bg2); border: 1px solid var(--line); border-radius: 3px; color: var(--fg0); padding: 0 var(--sp); font: inherit; font-size: 14px; }
+.btn-filter { min-width: 9em; }
+.active-chips { min-height: 36px; align-items: center; }
+.active-chips .chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; overflow-wrap: anywhere; text-align: left; }
+.explore-search { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--sp); }
+.explore-search input { min-height: 44px; min-width: 0; background: var(--bg2); border: 1px solid var(--line); border-radius: 3px; color: var(--fg0); padding: 0 var(--sp); font: inherit; }
+.count-row { display: flex; align-items: center; justify-content: space-between; gap: var(--sp); height: 44px; border-bottom: 1px solid var(--line-strong); }
+.count { font-size: var(--fs-s); color: var(--fg1); white-space: nowrap; }
+.count b { color: var(--fg0); font-variant-numeric: tabular-nums; }
+.btn-small { min-height: 36px; padding: 0 calc(var(--sp) * 1.5); font-size: var(--fs-s); }
+.sort-note { margin: 0; min-height: 1.6em; line-height: 1.6; }
+
+/* 読み込み中の骨組み（カードと同じ大きさ） */
+.sk-card { display: grid; gap: 8px; align-content: start; }
+.sk-line { height: 14px; border-radius: 2px; background: var(--bg2); }
+.sk-line.short { width: 60%; }
+@media (prefers-reduced-motion: no-preference) { .sk-card .thumb, .sk-line { animation: sk-pulse 1.2s ease-in-out infinite alternate; } }
+@keyframes sk-pulse { from { opacity: .55; } to { opacity: 1; } }
+
+/* スマホ: パネルは下からのシート。HTML の時点で閉じている（JS が open を切り替えるのはシートを開くときだけ） */
+.sheet-head, .sheet-foot { display: none; }
+.bottom-bar { display: none; }
+@media (max-width: 959px) {
+  .panel {
+    position: fixed; z-index: 40; left: 0; right: 0; bottom: 0; max-height: 85vh; max-height: 85dvh; overflow-y: auto; overscroll-behavior: contain;
+    border-radius: 6px 6px 0 0; transform: translateY(100%); visibility: hidden;
+  }
+  .panel.open { transform: none; visibility: visible; }
+  @media (prefers-reduced-motion: no-preference) { .panel { transition: transform .2s ease, visibility 0s linear .2s; } .panel.open { transition: transform .2s ease; } }
+  .sheet-head { display: flex; position: sticky; top: 0; z-index: 2; align-items: center; justify-content: space-between; padding: var(--sp) var(--sp) var(--sp) calc(var(--sp) * 2); background: var(--bg1); border-bottom: 1px solid var(--line); font: 700 15px var(--font-display); }
+  .sheet-foot { display: block; position: sticky; bottom: 0; z-index: 2; padding: var(--sp) calc(var(--sp) * 2) calc(var(--sp) + env(safe-area-inset-bottom, 0px)); background: var(--bg1); border-top: 1px solid var(--line); }
+  .sheet-bg:not([hidden]) { position: fixed; inset: 0; z-index: 39; background: rgba(8, 6, 5, .6); }
+  .bottom-bar {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--sp); position: fixed; z-index: 30; left: 0; right: 0; bottom: 0;
+    padding: var(--sp) 16px calc(var(--sp) + env(safe-area-inset-bottom, 0px)); background: rgba(20, 17, 16, .96); border-top: 1px solid var(--line-strong);
+  }
+  .bar-sort { position: relative; display: block; min-width: 0; }
+  .bar-sort span { position: absolute; left: 12px; top: 2px; font-size: 10px; color: var(--fg2); pointer-events: none; }
+  .bar-sort select { width: 100%; padding-top: 10px; }
+  body:has(#bottom-bar) { padding-bottom: 76px; }
+}
+@media (min-width: 960px) {
+  .panel-sort { padding: calc(var(--sp) * 2) calc(var(--sp) * 2) var(--sp); }
+  .panel-sort .sort-select { width: 100%; }
+}
+.panel-sort { display: grid; }
+@media (max-width: 959px) { .panel-sort { padding: calc(var(--sp) * 1.5) calc(var(--sp) * 2) 0; } .panel-sort .sort-select { width: 100%; } }
+
+/* スマホでは結果を上に寄せる: 見出しの説明は見出しの下へ回し、目的別チップは横にスクロールする1行にする。
+   並べ替えと絞り込みは下端の固定バーにあるので、結果の上には出さない */
+@media (max-width: 959px) {
+  .section-head:has(+ .explore) { flex-wrap: wrap; row-gap: 4px; margin-bottom: calc(var(--sp) * 1.5); }
+  .purpose { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+  .purpose::-webkit-scrollbar { display: none; }
+  .purpose .chip { flex: 0 0 auto; white-space: nowrap; }
+  .tools { display: none; }
+}

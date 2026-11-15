@@ -63,8 +63,8 @@
     return idAfter(location.pathname, 'v');
   }
 
-  /** 探索ページの絞り込みチップの種類（data-len / data-g / data-lab）を名前にする */
-  var CHIP_KEYS = { len: 'len', g: 'genre', lab: 'label' };
+  /** 探索ページのチップの種類（data-len / data-g / data-lab / data-pb / data-preset / data-rm）を名前にする */
+  var CHIP_KEYS = { len: 'len', g: 'genre', lab: 'label', pb: 'price', preset: 'preset', rm: 'remove' };
   function chipKey(el) {
     for (var k in CHIP_KEYS) {
       if (k in el.dataset) return CHIP_KEYS[k];
@@ -95,8 +95,8 @@
       return;
     }
 
-    // 探索ページの絞り込みチップ
-    if ((el = t.closest('#panel .chip'))) {
+    // 探索ページのチップ（絞り込み、目的別、適用中の条件を外す）。選んだ値（ジャンル名など）は送らない
+    if ((el = t.closest('#panel .chip, #purpose .chip, #active-chips .chip'))) {
       send('filter_use', { filter: 'chip', filter_key: chipKey(el) });
       return;
     }
@@ -122,24 +122,18 @@
     }
   }
 
-  // 探索ページの絞り込み（選択・チェック・スライダー）。スライダーは動かし終えたとき（change）だけ送る
+  // 探索ページの絞り込み（選択・チェック）と並べ替え（data-filter="sort" の select。パネルの外にもある）
   function onChange(e) {
     var el = e.target;
-    if (!el || !el.closest || !el.closest('#panel')) return;
-    var id = (el.id || '').replace(/^f-/, '');
+    if (!el || !el.closest || !el.closest('#panel, [data-filter]')) return;
+    var id = el.getAttribute('data-filter') || (el.id || '').replace(/^f-/, '');
     var tag = el.tagName;
     if (tag === 'SELECT') {
       // 選んだ値（出演者名など）は送らない。指定したか、解除したかだけ
-      send('filter_use', { filter: 'select', filter_key: id, filter_value: el.value === '' ? 'clear' : 'set' });
+      // 並べ替えは選んだ並び（rec など。固定の値）を送る
+      send('filter_use', { filter: 'select', filter_key: id, filter_value: id === 'sort' ? el.value : el.value === '' ? 'clear' : 'set' });
     } else if (tag === 'INPUT' && el.type === 'checkbox') {
       send('filter_use', { filter: 'checkbox', filter_key: id, filter_value: el.checked ? 1 : 0 });
-    } else if (tag === 'INPUT' && el.type === 'range') {
-      var v = Number(el.value);
-      send('filter_use', {
-        filter: 'slider',
-        filter_key: el.getAttribute('data-k') || id,
-        filter_value: isFinite(v) ? v : '',
-      });
     }
   }
 

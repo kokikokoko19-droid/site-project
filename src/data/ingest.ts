@@ -44,8 +44,12 @@ export async function ingestRecent(
   });
 }
 
+/** refreshExisting の1回の上限の既定（1 秒 1 回の呼び出しで約 25 分。C-1） */
+export const DEFAULT_REFRESH_LIMIT = 1500;
+
 /**
- * active の作品を cid 指定で1件ずつ再取得する（limit で上限。content_id 昇順の先頭から）。
+ * active の作品を cid 指定で1件ずつ再取得する（limit で上限、既定 DEFAULT_REFRESH_LIMIT。fetchedAt の古い順、同じなら content_id 昇順）。
+ * 古い順に回すので、毎日上限まで回せば全件が順番に新しくなる。
  * 返ってきた作品は upsert、resultCount が 0 の作品は gone 候補にして、最後に markGone する。
  * markGone には「gone 候補以外の active 全ID」を渡す（limit で確認しなかった作品を巻き込まないため）。
  * 安全装置: 1件も存在を確認できなかったとき（API 全滅の疑い）は markGone を呼ばない。
@@ -56,8 +60,11 @@ export async function refreshExisting(
   if (opts.limit !== undefined) checkInt('limit', opts.limit, 0);
   const now = opts.now ?? (() => new Date());
   const notify = opts.onProgress ?? (() => {});
-  const activeIds = db.listWorks({ status: 'active' }).map((w) => w.contentId);
-  const targets = activeIds.slice(0, opts.limit); // limit 未指定なら全件
+  const active = db.listWorks({ status: 'active' }); // content_id 昇順
+  const activeIds = active.map((w) => w.contentId);
+  const targets = [...active] // sort は安定なので、fetchedAt が同じなら content_id 昇順のまま
+    .sort((a, b) => (a.fetchedAt < b.fetchedAt ? -1 : a.fetchedAt > b.fetchedAt ? 1 : 0))
+    .slice(0, opts.limit ?? DEFAULT_REFRESH_LIMIT).map((w) => w.contentId);
   const goneIds = new Set<string>();
   let confirmed = 0; // 存在を確認できた件数
   let updated = 0;

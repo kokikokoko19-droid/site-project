@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { openDb } from '../src/data/db.ts';
 import { ALL_LABELS, runDerive } from '../src/data/derive.ts';
-import { exportAll, toCardRecord } from '../src/data/export.ts';
+import { buildNames, exportAll, priceBand, ratingBand, recommendScore, scoreContext, toCardRecord } from '../src/data/export.ts';
 import { normalizeItems } from '../src/data/normalize.ts';
 import { syntheticItemList } from '../src/data/synthetic.ts';
 import type { DerivedLabel, Work } from '../src/data/types.ts';
@@ -35,24 +35,52 @@ function makeWork(n: number, patch: Partial<Work> = {}): Work {
   };
 }
 
-test('toCardRecord: 項目の対応（d は日付10文字、sale と sm は真偽、m と s は先頭の名前）', () => {
+const ctxOf = (works: Work[], now = NOW) => ({ names: buildNames(works).index, score: scoreContext(works, now) });
+
+test('toCardRecord: 名前は names の添字、価格は帯、評価は 5 件以上で 0.5 刻み。実額・件数・平均・順位は出ない', () => {
   const w = makeWork(1, {
     actresses: [ref('a1', '出演者A'), ref('a2', '出演者B')], makers: [ref('m1', 'メーカーA')], series: [ref('s1', 'シリーズA'), ref('s2', 'シリーズB')],
     genres: [ref('g1', 'タグ01'), ref('g2', 'タグ02')], volumeMin: 90, reviewCount: 7, reviewAvg: 4.2, priceMin: 500, listPrice: 800,
     imageSmall: 'https://example.invalid/s.jpg', rankPosition: 5, sampleMovie: { sizes: { '476_306': 'https://example.invalid/m' }, pcFlag: 1, spFlag: 1 },
   });
-  assert.deepEqual(toCardRecord(w, ['セール中', '新作']), {
-    id: 'w00001', t: '作品 00001', a: ['出演者A', '出演者B'], m: 'メーカーA', s: 'シリーズA', g: ['タグ01', 'タグ02'], v: 90, d: '2026-01-01',
-    rc: 7, ra: 4.2, p: 500, lp: 800, sale: true, sm: true, img: 'https://example.invalid/s.jpg', rk: 5, lb: ['セール中', '新作'], ob: false,
+  const other = makeWork(2, { actresses: [ref('a2', '出演者B')], genres: [ref('g2', 'タグ02')], releasedAt: null, priceMin: 2500 });
+  const { names, score } = ctxOf([w, other]);
+  const card = toCardRecord(w, ['セール中', '新作'], names, score);
+  assert.deepEqual({ ...card, sc: 0 }, {
+    id: 'w00001', t: '作品 00001', a: [1, 0], m: 0, s: 0, g: [1, 0], d: '2026-01-01', v: 90, sc: 0, rb: 4,
+    pb: 0, sale: true, sm: true, lb: ['セール中', '新作'], img: 'https://example.invalid/s.jpg', ob: false,
   });
-  const bare = toCardRecord(makeWork(2, { releasedAt: null }), []);
-  assert.deepEqual([bare.d, bare.m, bare.s, bare.sale, bare.sm, bare.a], [null, null, null, false, false, []]);
+  assert.ok(Number.isInteger(card.sc) && card.sc >= 0 && card.sc <= 100);
+  assert.deepEqual(Object.keys(card).filter((k) => ['p', 'lp', 'rc', 'ra', 'rk'].includes(k)), []);
+  const bare = toCardRecord(other, [], names, score);
+  assert.deepEqual([bare.d, bare.m, bare.s, bare.sale, bare.sm, bare.a, bare.rb, bare.pb], [null, null, null, false, false, [0], null, 3]);
 });
 
-test('exportAll: 2500件は1000件ずつ3ファイルに分かれ、index.json に件数・チャンク名・名前一覧が入る', () => withDir((out) => {
+test('priceBand・ratingBand: 境界の値', () => {
+  assert.deepEqual([null, 0, 500, 501, 1000, 1001, 2000, 2001].map(priceBand), [null, 0, 0, 1, 1, 2, 2, 3]);
+  assert.equal(ratingBand({ reviewAvg: 4.74, reviewCount: 5 }), 4.5);
+  assert.equal(ratingBand({ reviewAvg: 4.76, reviewCount: 5 }), 5);
+  assert.equal(ratingBand({ reviewAvg: 4.9, reviewCount: 4 }), null);
+  assert.equal(ratingBand({ reviewAvg: null, reviewCount: 9 }), null);
+});
+
+test('recommendScore: 評価・件数・新しさ・人気が高いほど上がる', () => {
+  const base = makeWork(0, { releasedAt: '2025-01-01', reviewCount: 10, reviewAvg: 3.5 });
+  const all = [base, makeWork(9, { reviewCount: 200, reviewAvg: 3, rankPosition: 100 })];
+  const sc = (patch: Partial<Work>) => recommendScore({ ...base, ...patch }, scoreContext(all, NOW));
+  const b = sc({});
+  assert.ok(sc({ reviewAvg: 4.8 }) > b);
+  assert.ok(sc({ reviewCount: 150 }) > b);
+  assert.ok(sc({ releasedAt: '2026-10-20' }) > b);
+  assert.ok(sc({ rankPosition: 1 }) > b);
+  assert.ok(sc({ releasedAt: null }) < b);
+});
+
+test('exportAll: チャンクは配信開始日の新しい順（日付なしは最後）。index.json に names と counts（件数の多い順）が入る', () => withDir((out) => {
   const db = openDb(':memory:');
   const works = Array.from({ length: 2500 }, (_, i) => makeWork(i, {
-    genres: [ref(`g${i % 3}`, `タグ0${i % 3}`)], actresses: [ref(`a${i % 5}`, `出演者${'ABCDE'[i % 5]}`)],
+    releasedAt: i === 7 ? null : new Date(Date.UTC(2020, 0, 1 + (i * 37) % 2000)).toISOString().slice(0, 10),
+    genres: [ref(`g${i % 3}`, `タグ0${i % 3}`)], actresses: i % 5 === 4 ? [] : [ref(`a${i % 5}`, `出演者${'ABCDE'[i % 5]}`)],
     series: i % 2 ? [] : [ref('s1', 'シリーズA')], makers: [ref('m1', 'メーカーA')],
   }));
   db.upsertWorks(works);
@@ -60,12 +88,19 @@ test('exportAll: 2500件は1000件ずつ3ファイルに分かれ、index.json �
   assert.deepEqual(readdirSync(out).sort(), ['index.json', 'meta.json', 'works-000.json', 'works-001.json', 'works-002.json', 'works.json']);
   const chunks = [0, 1, 2].map((i) => read(out, `works-00${i}.json`));
   assert.deepEqual(chunks.map((c) => c.length), [1000, 1000, 500]);
-  assert.deepEqual(chunks.flat().map((r: any) => r.id), works.map((w) => w.contentId)); // content_id 昇順で、つなぐと全件
-  assert.deepEqual(read(out, 'index.json'), {
-    generatedAt: NOW.toISOString(), total: 2500, chunks: ['works-000.json', 'works-001.json', 'works-002.json'],
-    genres: ['タグ00', 'タグ01', 'タグ02'], actresses: ['出演者A', '出演者B', '出演者C', '出演者D', '出演者E'],
-    series: ['シリーズA'], makers: ['メーカーA'], labels: [], // 派生前はラベルなし
+  const flat = chunks.flat();
+  assert.deepEqual(new Set(flat.map((r: any) => r.id)), new Set(works.map((w) => w.contentId)));
+  const dates = flat.map((r: any) => r.d);
+  assert.equal(dates.at(-1), null);
+  assert.deepEqual(dates.slice(0, -1), [...dates.slice(0, -1)].sort().reverse());
+  const index = read(out, 'index.json');
+  assert.deepEqual({ ...index, names: undefined, counts: undefined }, {
+    generatedAt: NOW.toISOString(), total: 2500, chunks: ['works-000.json', 'works-001.json', 'works-002.json'], labels: [], names: undefined, counts: undefined,
   });
+  assert.deepEqual(index.names, { actress: ['出演者A', '出演者B', '出演者C', '出演者D'], maker: ['メーカーA'], series: ['シリーズA'], genre: ['タグ00', 'タグ01', 'タグ02'] });
+  assert.deepEqual(index.counts, { actress: [500, 500, 500, 500], maker: [2500], series: [1250], genre: [834, 833, 833] });
+  const first = flat.find((r: any) => r.id === 'w00002');
+  assert.deepEqual([first.a, first.g, first.m, first.s], [[2], [2], 0, 0]); // 出演者C・タグ02・メーカーA・シリーズA
   assert.equal(read(out, 'works.json').length, 2500);
 }));
 
@@ -85,7 +120,8 @@ test('exportAll: works.json は全 Work + derivedLabels + similarIds、紹介文
     assert.equal(similarIds.length, 8);
   }
   assert.ok(exported.some((e: any) => e.derivedLabels.length > 0));
-  assert.deepEqual(card[0], toCardRecord(db.getWork(card[0].id) as Work, db.getLabels(card[0].id) as DerivedLabel[]));
+  const { names, score } = ctxOf(db.listWorks({ status: 'active' }));
+  assert.deepEqual(card[0], toCardRecord(db.getWork(card[0].id) as Work, db.getLabels(card[0].id) as DerivedLabel[], names, score));
   const used = new Set(exported.flatMap((e: any) => e.derivedLabels));
   assert.deepEqual(read(out, 'index.json').labels, ALL_LABELS.filter((l) => used.has(l))); // 使われているラベルだけ、定義順
   for (const f of readdirSync(out)) {
@@ -122,4 +158,31 @@ test('exportAll: 出力先を作り、前回の余ったチャンクだけを消
   for (const bad of [0, -1, 1.5]) assert.throws(() => exportAll(db, out, { chunkSize: bad }), RangeError);
   assert.deepEqual(exportAll(openDb(':memory:'), out), { works: 0, chunks: 0 });
   assert.deepEqual([read(out, 'works.json'), read(out, 'index.json').chunks, readdirSync(out).includes('works-000.json')], [[], [], false]);
+}));
+
+test('exportAll: publish を渡すと、公開対象の作品だけを全ファイル（チャンク・works.json・meta・index・actresses）に出す', () => withDir((out) => {
+  const db = openDb(':memory:');
+  const policy = { recentMonths: 3, minReviews: 20, includeRanked: true, includeFollowed: true };
+  const publish = { now: NOW, policy, follow: { actresses: [], series: [], makers: [{ id: 'm9' }] } };
+  const works = [
+    makeWork(0, { releasedAt: '2026-10-01T10:00:00', actresses: [ref('a0', '出演者A')] }), // 直近
+    makeWork(1, { reviewCount: 30, actresses: [ref('a1', '出演者B')] }), // レビュー多数
+    makeWork(2, { rankPosition: 7 }), // 人気順
+    makeWork(3, { makers: [ref('m9', 'メーカーZ')] }), // 指定メーカー
+    makeWork(4, { reviewCount: 3, actresses: [ref('a4', '出演者X')], makers: [ref('m4', 'メーカーX')] }), // 非公開
+  ];
+  db.upsertWorks(works);
+  db.upsertActressProfiles(['a0', 'a1', 'a4'].map((id) => ({
+    id, name: id, ruby: null, birthday: null, bloodType: null, hobby: null, prefectures: null, height: null, bust: null, waist: null, hip: null, cup: null, listUrl: null, fetchedAt: '2026-11-01T00:00:00.000Z',
+  })));
+  runDerive(db, { now: NOW, publish });
+  assert.equal(exportAll(db, out, { now: NOW, publish }).works, 4);
+  const hidden = works[4].contentId;
+  assert.equal(read(out, 'index.json').total, 4);
+  assert.deepEqual(read(out, 'actresses.json').map((a: any) => a.id), ['a0', 'a1']);
+  for (const f of readdirSync(out)) {
+    const text = readFileSync(join(out, f), 'utf8');
+    for (const s of [`"${hidden}"`, '出演者X', 'メーカーX']) assert.ok(!text.includes(s), `${f} に ${s}`);
+  }
+  assert.equal(exportAll(db, out, { now: NOW }).works, 5); // 渡さなければ active の全件（従来どおり）
 }));

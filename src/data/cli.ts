@@ -1,10 +1,10 @@
 /**
  * データ層の CLI。使い方: node --experimental-strip-types src/data/cli.ts <command> [--flags]
- *   ingest  FANZA API から取り込む。直近の取り込み（--recent-days N、既定 7）に続けて、--follow（config/follow.json の指定軸の全作品。--follow-config で変更）、--refresh（取り込み済みの再取得）、
+ *   ingest  FANZA API から取り込む。直近の取り込み（--recent-days N、既定 7）に続けて、--follow（config/follow.json の指定軸の全作品。--follow-config で変更）、--refresh（取り込み済みの再取得。fetchedAt の古い順に --refresh-limit N 件、既定 1500）、
  *           --ranked-pages N（人気順の上位 N ページ）、--actress-profiles（works の出演者のうちプロフィール未取得の人。1回の上限は --actress-profiles-max N、既定 1500）、
  *           --actress-profiles-all（出演者全員を取り直す。上限は指定時のみ）を行う。--synthetic N なら API を使わず合成データ N 件だけを入れる
- *   derive  ラベル・似た作品・ランキング・今日の候補を再計算する
- *   export  探索UI・ページ生成用の JSON を出力する
+ *   derive  ラベル・似た作品・ランキング・今日の候補を再計算する（公開対象だけ。--publish-config で掲載方針、既定 config/publish.json）
+ *   export  探索UI・ページ生成用の JSON を出力する（公開対象だけ。derive と同じ掲載方針と --follow-config を使う）
  *   all     ingest（上と同じフラグ）→ derive → export
  * 環境変数: FANZA_API_ID, FANZA_AFFILIATE_ID, DB_PATH（既定 data/catalog.sqlite）, EXPORT_DIR（既定 data/export）
  * 終了コード: 0 成功、1 実行中のエラー、2 使い方・設定の誤り（API ID 未設定を含む）。API ID や URL のクエリは出力しない。
@@ -18,26 +18,30 @@ import { runDerive } from './derive.ts';
 import { exportAll } from './export.ts';
 import { ingestActressProfiles, ingestSyntheticActressProfiles } from './ingest-actress.ts';
 import { ingestFollowed, loadFollowConfig } from './ingest-follow.ts';
-import { ingestRanked, ingestRecent, ingestSynthetic, refreshExisting } from './ingest.ts';
+import { DEFAULT_REFRESH_LIMIT, ingestRanked, ingestRecent, ingestSynthetic, refreshExisting } from './ingest.ts';
+import { loadPublishPolicy } from './policy.ts';
+import type { PublishContext } from './policy.ts';
 
 const USAGE = `使い方: node --experimental-strip-types src/data/cli.ts <command> [--flags]
-  ingest  [--recent-days N] [--follow [--follow-config PATH]] [--refresh] [--ranked-pages N]
+  ingest  [--recent-days N] [--follow [--follow-config PATH]] [--refresh [--refresh-limit N]] [--ranked-pages N]
           [--actress-profiles | --actress-profiles-all] [--actress-profiles-max N] [--synthetic N]
-  derive
-  export
+  derive  [--publish-config PATH] [--follow-config PATH]
+  export  [--publish-config PATH] [--follow-config PATH]
   all     （ingest と同じフラグ。ingest → derive → export）
+  derive・export は掲載方針（既定 config/publish.json）と指定軸（既定 config/follow.json）で公開対象を絞る
 環境変数: FANZA_API_ID, FANZA_AFFILIATE_ID, DB_PATH（既定 data/catalog.sqlite）, EXPORT_DIR（既定 data/export）`;
 
 /** 使い方・設定の誤り（終了コード 2） */
 class UsageError extends Error {}
 
 type Flags = {
-  follow: boolean; followConfig: string; recentDays: number; refresh: boolean; rankedPages: number | null;
+  follow: boolean; followConfig: string; recentDays: number; refresh: boolean; refreshLimit: number; rankedPages: number | null;
   /** 'missing' は未取得の人だけ、'all' は全員、null は取り込まない */
   actressProfiles: 'missing' | 'all' | null;
   /** 1回に問い合わせる出演者の上限（null は無制限） */
   actressProfilesMax: number | null;
   synthetic: number | null;
+  publishConfig: string;
 };
 
 /** フラグの整数を読む（未指定なら fallback） */
@@ -52,19 +56,21 @@ function parseCli(argv: string[]): { command: string | undefined; flags: Flags; 
     const { values, positionals } = parseArgs({
       args: argv, allowPositionals: true,
       options: {
-        'recent-days': { type: 'string' }, refresh: { type: 'boolean' }, follow: { type: 'boolean' }, 'follow-config': { type: 'string' }, 'ranked-pages': { type: 'string' },
+        'recent-days': { type: 'string' }, refresh: { type: 'boolean' }, 'refresh-limit': { type: 'string' }, follow: { type: 'boolean' }, 'follow-config': { type: 'string' }, 'ranked-pages': { type: 'string' },
         'actress-profiles': { type: 'boolean' }, 'actress-profiles-all': { type: 'boolean' }, 'actress-profiles-max': { type: 'string' },
-        synthetic: { type: 'string' }, help: { type: 'boolean', short: 'h' },
+        'publish-config': { type: 'string' }, synthetic: { type: 'string' }, help: { type: 'boolean', short: 'h' },
       },
     });
     if (positionals.length > 1) throw new UsageError(`余分な引数があります: ${positionals.slice(1).join(' ')}`);
     const flags: Flags = {
       follow: values.follow === true, followConfig: values['follow-config'] ?? 'config/follow.json',
       recentDays: toInt('recent-days', values['recent-days'], 7, 0) as number, refresh: values.refresh === true,
+      refreshLimit: toInt('refresh-limit', values['refresh-limit'], DEFAULT_REFRESH_LIMIT, 1) as number,
       actressProfiles: values['actress-profiles-all'] === true ? 'all' : values['actress-profiles'] === true ? 'missing' : null,
       // 未取得分だけのときは既定 1500 人（1 秒 1 回の呼び出しで約 25 分）。全員のときは指定時だけ上限を付ける
       actressProfilesMax: toInt('actress-profiles-max', values['actress-profiles-max'], values['actress-profiles-all'] === true ? null : 1500, 1),
       rankedPages: toInt('ranked-pages', values['ranked-pages'], null, 1), synthetic: toInt('synthetic', values.synthetic, null, 1),
+      publishConfig: values['publish-config'] ?? 'config/publish.json',
     };
     return { command: positionals[0], flags, help: values.help === true };
   } catch (e) {
@@ -104,8 +110,8 @@ async function runIngest(db: Db, f: Flags): Promise<void> {
     log(`[ingest] 完了: ${summary(await ingestFollowed(client, db, { follow: loadFollowConfig(f.followConfig), onProgress }))}`);
   }
   if (f.refresh) {
-    log('[ingest] 取り込み済みの作品を再取得します');
-    log(`[ingest] 完了: ${summary(await refreshExisting(client, db, { onProgress }))}`);
+    log(`[ingest] 取り込み済みの作品を、取得日時の古い順に最大 ${f.refreshLimit} 件再取得します`);
+    log(`[ingest] 完了: ${summary(await refreshExisting(client, db, { limit: f.refreshLimit, onProgress }))}`);
   }
   if (f.rankedPages !== null) { // 順位は最後に付ける（後の upsert で消さないため）
     log(`[ingest] 人気順の上位 ${f.rankedPages} ページを取り込みます`);
@@ -137,12 +143,19 @@ export async function main(argv: string[]): Promise<number> {
     try {
       log(`[db] ${dbPath}`);
       if (ingesting) await runIngest(db, flags);
+      // 掲載方針は derive と export で同じものを使う（now も1回だけ決める）
+      const publish: PublishContext | undefined = command === 'ingest' ? undefined
+        : { now: new Date(), policy: loadPublishPolicy(flags.publishConfig), follow: loadFollowConfig(flags.followConfig) };
+      if (publish) {
+        const p = publish.policy;
+        log(`[publish] 直近 ${p.recentMonths} か月は全件、それ以前はレビュー ${p.minReviews} 件以上${p.includeRanked ? '＋人気順の上位' : ''}${p.includeFollowed ? '＋指定軸' : ''}`);
+      }
       if (command === 'derive' || command === 'all') {
-        const r = runDerive(db);
+        const r = runDerive(db, { now: publish?.now, publish });
         log(`[derive] 作品 ${r.works} 件を処理: ラベル付き ${r.labeled} 件、似た作品あり ${r.similar} 件`);
       }
       if (command === 'export' || command === 'all') {
-        const r = exportAll(db, outDir);
+        const r = exportAll(db, outDir, { now: publish?.now, publish });
         log(`[export] 作品 ${r.works} 件を ${r.chunks} 個のチャンクに分けて ${outDir} に出力しました`);
       }
     } finally {

@@ -1,6 +1,8 @@
 /** 派生計算（ラベル docs/02 5.2、似た作品 4.4、ランキング、今日の候補）。純粋関数で、DB に触れるのは runDerive だけ。日付は日本時間の暦日で数える */
 import { DEFAULT_THRESHOLDS } from './types.ts';
 import type { Db } from './db.ts';
+import { publishFilter } from './policy.ts';
+import type { PublishContext } from './policy.ts';
 import type { DerivedLabel, LabelThresholds, Similar, Work } from './types.ts';
 
 /** ラベルの並び順（DerivedLabel の定義順）。出力はこの順にそろう */
@@ -179,15 +181,23 @@ export function pickTodays(works: Work[], dateKey: string, n = 10, thresholds?: 
   return pool.slice(0, Math.max(0, n));
 }
 
-/** active の全作品から派生データを再計算して保存する。labeled / similar は、ラベル・似た作品が1件以上付いた作品の数。今日の候補の日付は日本時間の now から決める */
+/**
+ * active の作品から派生データを再計算して保存する。labeled / similar は、ラベル・似た作品が1件以上付いた作品の数。今日の候補の日付は日本時間の now から決める。
+ * publish（掲載方針）を渡すと、ラベル・似た作品・ランキング・今日の候補・作品数の集計を公開対象だけで行う（DB には全件が入っている前提）。
+ * 公開対象から外れた作品のラベルは消す（似た作品は DB の API で消せないので残るが、export が公開対象だけを出す）。
+ * 渡さないときは active の全件が対象（テストや従来の呼び出し用）。works は公開対象の件数。
+ */
 export function runDerive(
-  db: Db, opts: { now?: Date; thresholds?: LabelThresholds; similarN?: number } = {},
+  db: Db, opts: { now?: Date; thresholds?: LabelThresholds; similarN?: number; publish?: PublishContext } = {},
 ): { works: number; labeled: number; similar: number } {
-  const now = opts.now ?? new Date(), works = db.listWorks({ status: 'active' });
+  const now = opts.now ?? new Date(), active = db.listWorks({ status: 'active' });
+  const works = opts.publish ? active.filter(publishFilter(opts.publish)) : active;
   const ctx: LabelContext = { now, thresholds: opts.thresholds, ...buildRefCounts(works) };
   const entries = works.map((w) => ({ contentId: w.contentId, labels: computeLabels(w, ctx) as string[] }));
+  const included = new Set(works.map((w) => w.contentId));
+  const dropped = active.filter((w) => !included.has(w.contentId)).map((w) => ({ contentId: w.contentId, labels: [] as string[] }));
   const similar = computeSimilarAll(works, opts.similarN ?? 8);
-  db.replaceDerivedLabels(entries); // ラベルが0件の作品も渡して、前回のラベルを消す
+  db.replaceDerivedLabels([...entries, ...dropped]); // ラベルが0件の作品も渡して、前回のラベルを消す
   db.replaceSimilar(similar);
   db.setMeta('rankings', JSON.stringify(computeRankings(works)));
   db.setMeta('todays', JSON.stringify(pickTodays(works, new Date(now.getTime() + JST).toISOString().slice(0, 10), 10, opts.thresholds)));
