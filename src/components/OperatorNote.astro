@@ -1,0 +1,38 @@
+---
+// トップの「運営者から」の中身。src/content/notes の最新の公開（draft: false）の1件の本文と日付を出す。
+// note が1件も無いときは fallback（既存の仮文）をそのまま出す。
+// 使い方（トップの .letter の中の <div> の代わりに置く）:
+//   <section class="section">
+//     <div class="letter">
+//       <OperatorNote fallback="（ここは運営者が書く場所です。…）" fallbackDate={letterDate} />
+//     </div>
+//   </section>
+// 見た目は common.css の .letter（.from / p / .date）をそのまま使う。出力は <div> 1つ。
+import { getCollection, render } from 'astro:content';
+
+interface Props {
+  /** note が無いときに出す文（既存の仮文）。段落は空行で分ける */
+  fallback?: string;
+  /** note が無いときの日付表示（例: 11月15日）。省略すると日付は出さない */
+  fallbackDate?: string;
+  /** 日付のあとに付ける署名 */
+  signature?: string;
+}
+
+const { fallback = '', fallbackDate = '', signature = 'AVめぐり 編集' } = Astro.props;
+
+const notes = (await getCollection('notes', (n) => !n.data.draft)).sort((a, b) => b.data.date.getTime() - a.data.date.getTime());
+const latest = notes[0];
+const Content = latest ? (await render(latest)).Content : null;
+// 日付は UTC で整える（ビルドする環境のタイムゾーンで1日ずれないように）
+const dateText = latest
+  ? new Intl.DateTimeFormat('ja-JP', { timeZone: 'UTC', month: 'long', day: 'numeric' }).format(latest.data.date)
+  : fallbackDate;
+const paragraphs = fallback.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p !== '');
+---
+
+<div>
+  <div class="from">運営者から</div>
+  {Content ? <Content /> : paragraphs.map((p) => <p>{p}</p>)}
+  <div class="date">{dateText && <>{dateText}　</>}{signature}</div>
+</div>

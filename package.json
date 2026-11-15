@@ -16,7 +16,8 @@
     "ingest": "node --experimental-strip-types src/data/cli.ts ingest",
     "derive": "node --experimental-strip-types src/data/cli.ts derive",
     "export": "node --experimental-strip-types src/data/cli.ts export",
-    "x:post": "node --experimental-strip-types src/x/cli.ts post"
+    "x:post": "node --experimental-strip-types src/x/cli.ts post",
+    "draft:weekly": "node --experimental-strip-types scripts/draft-weekly.ts"
   },
   "dependencies": {
     "@astrojs/sitemap": "3.7.4",
