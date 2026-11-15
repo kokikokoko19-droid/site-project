@@ -52,3 +52,19 @@ export function sampleSmallUrl(large: string): string | null {
   const m = /^(https?:\/\/[^?#]*\/)([^/?#]+)jp-(\d+)\.jpg$/.exec(large.trim());
   return m ? `${m[1]}${m[2]}-${m[3]}.jpg` : null;
 }
+
+/** 五十音の行（出演者一覧の行タブ）。並びはこの配列の順 */
+export const KANA_ROWS = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら', 'わ'] as const;
+const ROW_CHARS = ['あいうえおぁぃぅぇぉゔ', 'かきくけこゕゖ', 'さしすせそ', 'たちつてとっ', 'なにぬねの', 'はひふへほ', 'まみむめも', 'やゆよゃゅょ', 'らりるれろ', 'わゐゑをんゎ'];
+
+/** 読み（ふりがな。無ければ名前）の先頭の文字から、五十音の行を返す。かなで始まらないときは null */
+export function kanaRow(reading: string | null | undefined): (typeof KANA_ROWS)[number] | null {
+  const head = [...(reading ?? '').trim()][0];
+  if (!head) return null;
+  // カタカナはひらがなに、濁点・半濁点は外す（「が」→「か」、「パ」→「は」）
+  const code = head.codePointAt(0)!;
+  const hira = code >= 0x30a1 && code <= 0x30f6 ? String.fromCodePoint(code - 0x60) : head;
+  const base = hira.normalize('NFD').replace(/[゙゚]/g, '').normalize('NFC');
+  const i = ROW_CHARS.findIndex((row) => row.includes(base));
+  return i < 0 ? null : KANA_ROWS[i];
+}

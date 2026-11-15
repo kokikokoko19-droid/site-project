@@ -35,3 +35,18 @@ describe('sampleSmallUrl', () => {
     assert.equal(sampleSmallUrl(''), null);
   });
 });
+
+describe('kanaRow', () => {
+  it('ひらがな・カタカナ・濁音を行にまとめる。かな以外は null', async () => {
+    const { kanaRow } = await import('../src/lib/format.ts');
+    assert.equal(kanaRow('あおい'), 'あ');
+    assert.equal(kanaRow('ガラス'), 'か');
+    assert.equal(kanaRow('ぱんだ'), 'は');
+    assert.equal(kanaRow('ヴィオラ'), 'あ');
+    assert.equal(kanaRow('をとめ'), 'わ');
+    assert.equal(kanaRow('Alpha'), null);
+    assert.equal(kanaRow('出演者'), null);
+    assert.equal(kanaRow(''), null);
+    assert.equal(kanaRow(null), null);
+  });
+});
