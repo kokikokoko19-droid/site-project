@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { affiliateMode, outboundUrl, rewriteAffiliateId, siteAffiliateId } from '../src/lib/links.ts';
+import { affiliateMode, outboundUrl, rewriteAffiliateId, siteAffiliateId, stripAffiliateId } from '../src/lib/links.ts';
 
 const saved = { m: process.env.AFFILIATE_LINKS, s: process.env.FANZA_SITE_AFFILIATE_ID };
 afterEach(() => {
@@ -19,6 +19,24 @@ describe('rewriteAffiliateId', () => {
   it('無関係のURLと siteId が null のときは変更なし', () => {
     assert.equal(rewriteAffiliateId('https://example.com/?af_id=a', 'site-003'), 'https://example.com/?af_id=a');
     assert.equal(rewriteAffiliateId('https://al.fanza.co.jp/?af_id=a', null), 'https://al.fanza.co.jp/?af_id=a');
+  });
+});
+
+describe('stripAffiliateId', () => {
+  it('パス形式の affi_id を区切りごと取り除く', () => {
+    assert.equal(stripAffiliateId('https://www.dmm.co.jp/litevideo/-/part/=/affi_id=test-990/cid=abc/size=560_360/'), 'https://www.dmm.co.jp/litevideo/-/part/=/cid=abc/size=560_360/');
+    assert.equal(stripAffiliateId('https://www.dmm.co.jp/litevideo/-/part/=/cid=abc/affi_id=test-990/'), 'https://www.dmm.co.jp/litevideo/-/part/=/cid=abc/');
+  });
+  it('クエリ形式の affi_id を取り除く（先頭・途中・末尾）', () => {
+    assert.equal(stripAffiliateId('https://x.example/litevideo/?affi_id=a&cid=b'), 'https://x.example/litevideo/?cid=b');
+    assert.equal(stripAffiliateId('https://x.example/litevideo/?cid=b&affi_id=a&size=1'), 'https://x.example/litevideo/?cid=b&size=1');
+    assert.equal(stripAffiliateId('https://x.example/litevideo/?cid=b&affi_id=a'), 'https://x.example/litevideo/?cid=b');
+    assert.equal(stripAffiliateId('https://x.example/litevideo/?affi_id=a'), 'https://x.example/litevideo/');
+  });
+  it('affi_id が無いURLと litevideo 以外のURLは変更しない', () => {
+    const plain = 'https://example.invalid/litevideo/-/part/=/cid=abc/size=560_360/';
+    assert.equal(stripAffiliateId(plain), plain);
+    assert.equal(stripAffiliateId('https://example.com/?affi_id=a'), 'https://example.com/?affi_id=a');
   });
 });
 

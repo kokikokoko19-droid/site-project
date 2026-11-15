@@ -1,0 +1,36 @@
+# 配信サーバー（mixhost / LiteSpeed）の設定。dist/ に含まれ、scripts/deploy.sh で転送される。
+# すべて <IfModule> で囲み、モジュールが無い環境でも 500 にならないようにする。
+
+Options -Indexes
+ErrorDocument 404 /404.html
+AddDefaultCharset UTF-8
+
+# http から https へ、www から apex（avmeguri.com）へ、301 で統一する
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} !=on
+  RewriteRule ^ https://avmeguri.com%{REQUEST_URI} [R=301,L]
+  RewriteCond %{HTTP_HOST} ^www\. [NC]
+  RewriteRule ^ https://avmeguri.com%{REQUEST_URI} [R=301,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set Strict-Transport-Security "max-age=31536000"
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+
+  # キャッシュ。HTML は毎回確認、ハッシュ付きの /_astro/ は 1 年、データ類は 5 分。
+  # LiteSpeed でも動くよう、<If> ではなく SetEnvIf と env= で振り分ける
+  <IfModule mod_setenvif.c>
+    SetEnvIf Request_URI "(/|\.html)$" cc_html
+    SetEnvIf Request_URI "^/_astro/" cc_immutable
+    SetEnvIf Request_URI "^/(data|explorer|analytics)/" cc_short
+    SetEnvIf Request_URI "^/(go|data)/" robots_noindex
+  </IfModule>
+  Header set Cache-Control "no-cache" env=cc_html
+  Header set Cache-Control "public, max-age=31536000, immutable" env=cc_immutable
+  Header set Cache-Control "public, max-age=300" env=cc_short
+  # 中継ページとデータは検索に載せない
+  Header set X-Robots-Tag "noindex, nofollow" env=robots_noindex
+</IfModule>

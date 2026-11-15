@@ -127,6 +127,7 @@ jobs:
         # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする
         env:
           PUBLIC_NOINDEX: '1'
+          AFFILIATE_LINKS: 'off'
         run: npm run build
 
       - name: DB を smoke 用 cache に保存

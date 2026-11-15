@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#141110"/>
+  <circle cx="16" cy="16" r="13.6" fill="none" stroke="#c9392b" stroke-width="2.2" stroke-dasharray="48 2.5 22 1.5 10 1.2" transform="rotate(-24 16 16)"/>
+  <text x="16" y="21.6" text-anchor="middle" font-size="15.5" font-weight="700" fill="#c9392b" font-family="'Shippori Mincho B1','Hiragino Mincho ProN','Yu Mincho','Noto Serif JP',serif">巡</text>
+</svg>

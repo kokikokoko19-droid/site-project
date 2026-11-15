@@ -118,8 +118,26 @@ jobs:
       - name: 探索用 JSON を書き出す
         run: npm run export
 
+      - name: 公開の切替を要約に出す
+        # 切替は Settings > Secrets and variables > Actions の Variables で行う（docs/07_運用手順.md の 3.3 節）。値そのものは出さず、on/off と有無だけ出す
+        env:
+          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX }}
+          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS }}
+          PUBLIC_GA4_ID: ${{ vars.PUBLIC_GA4_ID }}
+        run: |
+          noindex=off; [ "$PUBLIC_NOINDEX" = "1" ] && noindex=on
+          affiliate=off; [ "$AFFILIATE_LINKS" = "on" ] && affiliate=on
+          ga4=無; [ -n "$PUBLIC_GA4_ID" ] && ga4=有
+          echo "公開の切替: noindex=$noindex、affiliate=$affiliate、GA4=$ga4" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: サイトをビルドする
-        # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする
+        # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする。
+        # postbuild の check-dist は AFFILIATE_LINKS を見て、/go/ の移動先と dist 全体の affi_id を検査する
+        env:
+          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX }}
+          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS }}
+          PUBLIC_GA4_ID: ${{ vars.PUBLIC_GA4_ID }}
+          FANZA_SITE_AFFILIATE_ID: ${{ secrets.FANZA_SITE_AFFILIATE_ID }}
         run: npm run build
 
       # 取り込みから build までが全部成功したときだけ保存する（失敗した実行の DB は残さない）。

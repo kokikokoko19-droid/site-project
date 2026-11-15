@@ -3,7 +3,9 @@
 //       （/go/、/data/、/_astro/、/explorer/、/analytics/ も含めてすべて確認する。外部URLは対象外）
 //   (b) 本文テキストに「undefined」「null」「NaN」「[object」「不明」が出ていないか（テンプレートの値漏れの検出）
 //   (c) /v/（作品ページ）の CTA に rel="sponsored nofollow" が付いているか（CTA があるページのみ）
-//   (d) ページ数の集計
+//   (d) アフィリエイトID。環境変数 AFFILIATE_LINKS が on なら /go/ の移動先に af_id= か affi_id= があること、
+//       それ以外（off）なら /go/ の移動先にそれが無く、dist の HTML 全体にも affi_id= を含むURLが無いこと
+//   (e) ページ数の集計
 // 問題があれば一覧を出して終了コード1、無ければ要約を出して0。外部ライブラリは使わない。
 // 速さのため、ファイル一覧を Set にして行き先を引き、禁止語は生のHTMLで先に絞ってから本文を取り出す。
 // 使い方: node scripts/check-dist.mjs [検査するディレクトリ。既定は dist]
@@ -13,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = resolve(process.argv[2] ?? join(root, 'dist'));
+const AFFILIATE_ON = process.env.AFFILIATE_LINKS === 'on';
+const GO_REFRESH = /<meta\s+http-equiv=["']?refresh["']?\s+content=["']\d+;\s*url=([^"']*)["']/i;
 const SHOW = 12; // 問題の種類ごとに一覧へ出す件数の上限
 
 /** 本文に出てはいけない語。英字の語は単語として現れたときだけ数える（"nullable" などは対象外） */
@@ -87,10 +91,12 @@ function targetExists(path) {
 const broken = new Map(); // 行き先 → 参照元
 const textHits = new Map(); // 禁止語 → ページ
 const relBad = new Map(); // ページ → rel が足りない CTA
+const affBad = new Map(); // 理由 → ページ（アフィリエイトIDの過不足）
 const sections = new Map(); // 最初の階層 → ページ数
 let linkTotal = 0;
 let vPages = 0;
 let ctaPages = 0;
+let goPages = 0;
 
 for (const file of htmlFiles) {
   const html = readFileSync(file, 'utf8');
@@ -126,6 +132,16 @@ for (const file of htmlFiles) {
     }
   }
 
+  // (d) アフィリエイトID。on: /go/ の移動先に ID があること。off: /go/ の移動先と HTML 全体に affi_id= が無いこと
+  if (page.startsWith('/go/')) {
+    goPages++;
+    const dest = GO_REFRESH.exec(html)?.[1] ?? '';
+    const hasId = /(?:^|[?&;/])(?:af_id|affi_id)=/.test(dest);
+    if (AFFILIATE_ON && !hasId) note(affBad, 'AFFILIATE_LINKS=on なのに /go/ の移動先にアフィリエイトID（af_id= / affi_id=）が無い', page);
+    if (!AFFILIATE_ON && hasId) note(affBad, 'AFFILIATE_LINKS が off なのに /go/ の移動先にアフィリエイトIDがある', page);
+  }
+  if (!AFFILIATE_ON && html.includes('affi_id=')) note(affBad, 'AFFILIATE_LINKS が off なのに HTML に affi_id= を含むURLがある', page);
+
   // (c) /v/ の CTA（FANZAへのボタン）。1つでも rel に sponsored と nofollow が無ければ不備
   if (page.startsWith('/v/')) {
     vPages++;
@@ -147,6 +163,7 @@ console.log(`[check-dist] ${distDir} を検査しました（${elapsed} 秒）`)
 console.log(`  HTML ページ: ${fmt(htmlFiles.length)} 件（${bySection}）`);
 console.log(`  内部リンク: 延べ ${fmt(linkTotal)} 件、行き先 ${fmt(exists.size)} 種類`);
 console.log(`  /v/ の作品ページ: ${fmt(vPages)} 件（CTA あり ${fmt(ctaPages)} 件）`);
+console.log(`  アフィリエイト: ${AFFILIATE_ON ? 'on' : 'off'}（/go/ ${fmt(goPages)} 件を検査）`);
 
 const sum = (map) => [...map.values()].reduce((s, e) => s + e.count, 0);
 const groups = [
@@ -164,6 +181,11 @@ const groups = [
     `CTA の rel 不備（sponsored nofollow が必要）: ${fmt(relBad.size)} ページ`,
     relBad,
     (k, e) => `${k}  ${fmt(e.count)} 件（例: ${e.examples[0]}）`,
+  ],
+  [
+    `アフィリエイトIDの過不足: ${affBad.size} 種類、延べ ${fmt(sum(affBad))} ページ`,
+    affBad,
+    (k, e) => `${k}  ${fmt(e.count)} ページ（例: ${e.examples.join('、')}）`,
   ],
 ];
 

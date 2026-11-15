@@ -11,7 +11,7 @@
 #   DEPLOY_PATH       必須。サーバー側の公開ディレクトリ（絶対パス）
 #   DEPLOY_KEY_FILE   必須。SSH 秘密鍵のファイルパス
 #   DEPLOY_PORT       任意。SSH のポート（既定 22）
-#   DEPLOY_KEEP       任意。--delete で消さないもの（カンマ区切り。既定 .htaccess,.well-known）
+#   DEPLOY_KEEP       任意。--delete で消さないもの（カンマ区切り。既定 .well-known。.htaccess は dist から配信する）
 #   DEPLOY_CHECK_URL  任意。転送後に確認する URL。200 以外なら終了コード 1
 #   DIST_DIR          任意。転送元（既定 dist）
 #
@@ -46,7 +46,7 @@ if [ "${#missing[@]}" -gt 0 ]; then
 fi
 
 port="${DEPLOY_PORT:-22}"
-keep="${DEPLOY_KEEP:-.htaccess,.well-known}"
+keep="${DEPLOY_KEEP:-.well-known}"
 dist_dir="${DIST_DIR:-dist}"
 
 for cmd in rsync ssh; do
