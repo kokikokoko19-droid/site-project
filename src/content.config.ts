@@ -29,6 +29,11 @@ const feature = defineCollection({
     ...common,
     /** 特集に載せる作品の content_id（書いた順に表示）。数字だけのIDは "" で囲んで文字列にする */
     works: z.array(z.string()).default([]),
+    /**
+     * 載せる作品と運営者の一言（書いた順に、順位を付けて表示）。あれば works より優先する（works は互換のため残す）。
+     * 例: items: [{ id: "content_id_1", note: "一言" }, { id: "content_id_2" }]
+     */
+    items: z.array(z.object({ id: z.string(), note: z.string().optional() })).optional(),
     /** 特集の導入文（見出しの下に出す）。本文とは別に短く書く */
     intro: z.string().optional(),
   }),
