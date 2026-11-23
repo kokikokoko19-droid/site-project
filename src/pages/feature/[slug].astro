@@ -1,8 +1,9 @@
 ---
-// 特集のページ（/feature/{slug}/）。本文は src/content/feature/{slug}.md、載せる作品は frontmatter の works。
+// 特集のページ（/feature/{slug}/）。本文は src/content/feature/{slug}.md、載せる作品は frontmatter の items（無ければ works）。
+// 作品は 1 作品ずつ WorkBlock で縦に並べる（順位・題名 → 表紙 → データ → サンプル画像 → 一言 → FANZAで見る）。
 import { getCollection, render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
-import WorkGrid from '../../components/WorkGrid.astro';
+import WorkBlock from '../../components/WorkBlock.astro';
 import { loadCatalog } from '../../lib/catalog.ts';
 import type { CatalogWork } from '../../lib/catalog.ts';
 import '../../styles/article.css';
@@ -17,11 +18,16 @@ const { entry } = Astro.props;
 const { data } = entry;
 const { Content } = await render(entry);
 
-// works は content_id の配列。書いた順を保ち、重複とカタログに無いID（取り下げ・打ち間違い）は飛ばす
+// items（{ id, note? } の配列）があればその順と一言を使い、無ければ works（content_id の配列）を使う。
+// 書いた順を保ち、重複（先に書いた方を残す）とカタログに無いID（取り下げ・打ち間違い）は飛ばす
 const catalog = loadCatalog();
-const ids = [...new Set(data.works)];
-const works = ids.map((id) => catalog.byId.get(id)).filter((w): w is CatalogWork => w !== undefined);
-const skipped = ids.filter((id) => !catalog.byId.has(id));
+const source = data.items ?? data.works.map((id) => ({ id, note: undefined }));
+const seen = new Set<string>();
+const entries = source.filter((it) => !seen.has(it.id) && seen.add(it.id));
+const works = entries
+  .map((it) => ({ w: catalog.byId.get(it.id), note: it.note }))
+  .filter((x): x is { w: CatalogWork; note: string | undefined } => x.w !== undefined);
+const skipped = entries.map((it) => it.id).filter((id) => !catalog.byId.has(id));
 if (skipped.length > 0) {
   console.warn(`[feature/${entry.id}] カタログに無い content_id を飛ばしました: ${skipped.join(', ')}`);
 }
@@ -57,7 +63,11 @@ const updated = data.updated && iso(data.updated) !== iso(data.date) ? data.upda
     <div class="section-head">
       <h2>この特集の作品{works.length > 0 && <span class="muted" style="margin-left: 8px">{works.length}件</span>}</h2>
     </div>
-    <WorkGrid works={works} empty="作品は準備中です。" />
+    {works.length > 0 ? (
+      works.map((x, i) => <WorkBlock work={x.w} rank={i + 1} note={x.note} ctaPos="feature" eager={i === 0} />)
+    ) : (
+      <div class="empty"><p>作品は準備中です。</p></div>
+    )}
   </section>
 
   <p class="article-foot"><a href="/feature/">特集一覧へ戻る</a></p>
