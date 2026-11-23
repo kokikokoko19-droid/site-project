@@ -195,8 +195,11 @@ export function renderPage(w: CatalogWork, variant: number, ctx: PageContext = {
   return finish(pickOf(PAGE, variant)(facts(w), ctx));
 }
 /** 要約の文を、文型の番号を指定して作る（テスト用。通常は summaryText） */
-export function renderSummary(w: CatalogWork, variant: number): string {
-  return finish(pickOf(SUMMARY, variant)(facts(w)));
+/** opts.price を false にすると価格の句を入れない（ブロック型の一言など、価格をカードや値札に任せる場所向け） */
+export function renderSummary(w: CatalogWork, variant: number, opts: { price?: boolean } = {}): string {
+  const f = facts(w);
+  if (opts.price === false) { f.price = ''; f.regular = ''; }
+  return finish(pickOf(SUMMARY, variant)(f));
 }
 export function renderCard(w: CatalogWork, variant: number): string {
   return pickOf(CARD, variant)(facts(w)).filter((p) => p !== '').join('・');
@@ -211,8 +214,8 @@ export function pageText(w: CatalogWork, ctx: PageContext = {}): string {
   return renderPage(w, variantOf(w.contentId, 'page'), ctx);
 }
 /** 要約（3〜4文＋ラベル文。meta description 用）。項目が全て欠けたときは空文字 */
-export function summaryText(w: CatalogWork): string {
-  return renderSummary(w, variantOf(w.contentId, 'summary'));
+export function summaryText(w: CatalogWork, opts: { price?: boolean } = {}): string {
+  return renderSummary(w, variantOf(w.contentId, 'summary'), opts);
 }
 
 const RATED_MIN = 5; // 評価の位置を数える対象（レビュー件数がこれ以上の作品）

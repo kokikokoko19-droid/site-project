@@ -54,7 +54,8 @@ const shots = (work.sampleImages ?? [])
 const FALLBACK = 'this.onerror=null;this.src=this.dataset.s';
 
 const text = note?.trim() || '';
-const auto = text === '' ? summaryText(work) : '';
+// 価格は書かない（変わる数字は値札とカードに任せる。特集・記事の方針 docs/15）
+const auto = text === '' ? summaryText(work, { price: false }) : '';
 ---
 
 <article class="work-block">
