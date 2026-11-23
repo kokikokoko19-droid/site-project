@@ -200,8 +200,8 @@ const STICKY_SCRIPT = `(function () {
               {/* 画像の途中と末尾の CTA（作品ページの上の CTA と同じ部品・同じ文言）。出す条件は SampleGallery 側で決める。
                   CtaButton の pos の型は top/sticky/bottom だけだが、data-cta-pos にそのまま出るだけなので gallery-mid / gallery-end を渡す */}
               <SampleGallery images={work.sampleImages}>
-                {hasLink && <div slot="mid" class="cta-box work-gallery-cta" data-cta-watch><CtaButton id={work.contentId} pos={'gallery-mid' as 'top'} /></div>}
-                {hasLink && <div slot="end" class="cta-box work-gallery-cta" data-cta-watch><CtaButton id={work.contentId} pos={'gallery-end' as 'top'} /></div>}
+                {hasLink && <div slot="mid" class="cta-box work-gallery-cta" data-cta-watch><CtaButton id={work.contentId} pos="gallery-mid" /></div>}
+                {hasLink && <div slot="end" class="cta-box work-gallery-cta" data-cta-watch><CtaButton id={work.contentId} pos="gallery-end" /></div>}
               </SampleGallery>
             </section>
           )
