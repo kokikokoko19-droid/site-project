@@ -1,9 +1,16 @@
 ---
-// サンプル画像（公式配信の直リンク）。一覧には小さい版（…/{cid}-N.jpg）を並べ、タップで大きい版を Lightbox で開く。
-// 小さい版が読めないときは onerror で大きい版に差し替える。規約により加工は拡大縮小のみ。切り取りはせず、枠の中に全体を収める（object-fit: contain）。
-// 画面の密度が 2 倍以上（スマホの大半）では srcset で大きい版を選ばせる。1 倍の画面では小さい版のままなので、枠の幅を 120px までに抑えて引き伸ばさない（v/[id].astro）。
-// 最初は FIRST 枚だけを出し、残りは「すべて見る」（details 要素。JS 無しでも開く）の中に入れる。閉じている間は読み込まれない。
-import Lightbox from './Lightbox.astro';
+// サンプル画像（公式配信の直リンク）。大きい版（…/{cid}jp-N.jpg）を本文の幅に大きく縦に並べる（運営者の決定。ベンチマーク先の構造）。
+// スマホ（640px 未満）は 1 列で本文の幅いっぱい、PC は 2 列。枠は 4:3 で、画像は切り取らず枠の中に全体を収める（object-fit: contain。規約により加工は拡大縮小のみ）。
+// 枠の比率を CSS で固定するので、画像が読み込まれる前後で高さが変わらない（レイアウトシフトを出さない）。
+// 大きい版が読めないときは onerror で小さい版（…/{cid}-N.jpg）に差し替える（1回だけ）。srcset は使わない（常に大きい版を出すため）。
+// 最初の LAZY_FROM 枚は通常の読み込み、残りは loading="lazy"。枚数の上限は設けない。
+//
+// Lightbox（タップで拡大）は外した。理由: 本文に大きい版をそのまま出すので、スマホでは拡大しても得られる大きさがほとんど変わらない。
+// また Lightbox のスクリプトとマークアップ（約 4KB）が全作品ページ（1 万ページ超）に載るのを避けられる。
+//
+// FANZA へのボタンは呼び出し側（v/[id].astro）が名前付きスロットで渡す。mid は MID_AT 枚目の後、end はギャラリーの末尾。
+// 1 画面に CTA が 2 つ並ばないよう、mid は MID_AT 枚目の後ろにまだ MID_AFTER 枚以上あるときだけ、end は END_MIN 枚以上のときだけ出す
+// （スマホの 1 枚の高さはおよそ 270px。少ない枚数だと、上の CTA と同じ画面に入るため）。
 import { sampleSmallUrl } from '../lib/format.ts';
 
 interface Props {
@@ -12,18 +19,24 @@ interface Props {
 }
 
 const { images = [] } = Astro.props;
-const FIRST = 6;
-// 空文字などの無効な値は飛ばす
+const LAZY_FROM = 2;
+const MID_AT = 3;
+const MID_AFTER = 3;
+const END_MIN = 3;
+// 空文字などの無効な値は飛ばす。小さい版が組み立てられない（または同じ URL の）ときは差し替え先を持たない
 const items = images
   .filter((u) => typeof u === 'string' && u.trim() !== '')
   .map((u, i) => {
     const full = u.trim();
-    return { full, small: sampleSmallUrl(full) ?? full, n: i + 1 };
+    const small = sampleSmallUrl(full);
+    return { full, small: small && small !== full ? small : undefined, n: i + 1 };
   });
-const head = items.slice(0, FIRST);
-const rest = items.slice(FIRST);
-// 小さい版が読めないときは大きい版へ（1回だけ）。srcset を外さないと差し替えた src が使われない
-const FALLBACK = "this.onerror=null;this.removeAttribute('srcset');if(this.dataset.full&&this.src!==this.dataset.full)this.src=this.dataset.full";
+const head = items.slice(0, MID_AT);
+const rest = items.slice(MID_AT);
+const showMid = rest.length >= MID_AFTER && Astro.slots.has('mid');
+const showEnd = items.length >= END_MIN && Astro.slots.has('end');
+// 大きい版が読めないときは小さい版へ（1回だけ）
+const FALLBACK = 'this.onerror=null;if(this.dataset.small)this.src=this.dataset.small';
 ---
 
 {
@@ -31,45 +44,29 @@ const FALLBACK = "this.onerror=null;this.removeAttribute('srcset');if(this.datas
     <div class="gallery-wrap">
       <div class="gallery">
         {head.map((it) => (
-          <button type="button" class="g-item" data-lightbox-src={it.full} aria-label={`サンプル画像 ${it.n} を拡大`}>
-            <img src={it.small} srcset={`${it.small} 1x, ${it.full} 2x`} data-full={it.full} alt="" loading="lazy" decoding="async" onerror={FALLBACK} />
-          </button>
+          <img src={it.full} data-small={it.small} alt="" aria-label={`サンプル画像 ${it.n}`} loading={it.n > LAZY_FROM ? 'lazy' : undefined} decoding="async" onerror={FALLBACK} />
+        ))}
+        {showMid && <slot name="mid" />}
+        {rest.map((it) => (
+          <img src={it.full} data-small={it.small} alt="" aria-label={`サンプル画像 ${it.n}`} loading="lazy" decoding="async" onerror={FALLBACK} />
         ))}
       </div>
-      {rest.length > 0 && (
-        <details class="gallery-more">
-          <summary class="btn"><span class="when-closed">すべて見る（{items.length}枚）</span><span class="when-open">残りを閉じる</span></summary>
-          <div class="gallery">
-            {rest.map((it) => (
-              <button type="button" class="g-item" data-lightbox-src={it.full} aria-label={`サンプル画像 ${it.n} を拡大`}>
-                <img src={it.small} srcset={`${it.small} 1x, ${it.full} 2x`} data-full={it.full} alt="" loading="lazy" decoding="async" onerror={FALLBACK} />
-              </button>
-            ))}
-          </div>
-        </details>
-      )}
-      <Lightbox />
+      {showEnd && <slot name="end" />}
     </div>
   )
 }
 
 <style is:global>
   /* is:global にする理由: scoped だと全要素に属性が付き、数千ページ分のHTMLが膨らむ。
-     .gallery は作品ページのサンプル画像でしか使わない */
-  .gallery-wrap { display: grid; gap: calc(var(--sp) * 1.5); }
-  .gallery .g-item { aspect-ratio: 4 / 3; max-width: 100%; padding: 0; border: 0; background: var(--bg2); box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); border-radius: 2px; display: flex; align-items: center; justify-content: center; color: var(--fg2); font-size: 11px; cursor: zoom-in; overflow: hidden; }
-  .gallery .g-item:hover { box-shadow: inset 0 0 0 1px rgba(217,164,65,.6); }
-  .gallery img {
-    max-width: 100%;
-    max-height: 100%;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-  .gallery-more { display: grid; gap: calc(var(--sp) * 1.5); }
-  .gallery-more > summary { list-style: none; justify-self: start; }
-  .gallery-more > summary::-webkit-details-marker { display: none; }
-  .gallery-more .when-open, .gallery-more[open] .when-closed { display: none; }
-  .gallery-more[open] .when-open { display: inline; }
-  .gallery-more[open] > summary { order: 2; }
+     .gallery はこの部品でしか使わないので、.gallery-wrap / .gallery の配下だけに効く書き方にする */
+  .gallery-wrap { display: grid; gap: calc(var(--sp) * 2); }
+  /* common.css に古い .gallery（3〜5 列の小さな枠）の指定が残っているので、.gallery-wrap > .gallery で詳細度を上げて上書きする */
+  .gallery-wrap > .gallery { display: grid; gap: calc(var(--sp) * 1.5); grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 640px) { .gallery-wrap > .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  /* 枠は 4:3 で固定（CSS の aspect-ratio が画像本来の比率より優先されるので、読み込みの前後で高さが変わらない） */
+  .gallery > img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; background: var(--bg2); border-radius: 2px; }
+  /* 途中の CTA。PC では 3 枚目の右の空いたマスに縦中央で置く（行を 1 つ使わず、文書の順と見た目の順も揃う） */
+  .gallery > .cta-box { align-self: center; }
+  /* common.css の .gallery div（4:3 の枠）が CTA の箱にも掛かるので、.cta-box 本来の見た目に戻す */
+  .gallery > .cta-box { aspect-ratio: auto; display: grid; align-items: normal; justify-content: normal; background: var(--bg1); box-shadow: none; border-radius: 3px; color: inherit; font-size: inherit; }
 </style>
