@@ -1,0 +1,98 @@
+# 週次の「運営者から」の更新（docs/07_運用手順.md の 10 章）。
+# 毎週月曜 日本時間 07:00（UTC 日曜 22:00）に、日次と同じ DB の cache から派生計算・書き出しをやり直し（API は呼ばない）、
+# 週次統計から文を作って src/content/notes/ にコミットし、main へ push する。
+# ANTHROPIC_API_KEY が secrets にあれば Claude が下書きし、検査に落ちる・キーが無いときは数字だけのテンプレートの文になる。
+# 同じ週に運営者が書いた note（source: operator）があれば、何も書かない。
+# 注意: GITHUB_TOKEN による push は他のワークフローを起動しない。note がサイトに載るのは次の日次ビルド（daily.yml）から。
+name: Weekly Note
+
+on:
+  schedule:
+    # 日本時間 月曜 07:00 = UTC 日曜 22:00。GitHub 側の混雑で数分から十数分遅れることがある。
+    - cron: '0 22 * * 0'
+  workflow_dispatch:
+
+# 同時に 2 つ動かさない
+concurrency:
+  group: weekly-note
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  DB_PATH: data/catalog.sqlite
+  EXPORT_DIR: data/export
+
+jobs:
+  note:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: チェックアウト（main）
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Node.js を用意
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+
+      - name: 依存を入れる
+        run: npm ci
+
+      # 日次（daily.yml）が保存した DB を前方一致で復元する（いちばん新しいものが選ばれる）。
+      - name: DB を cache から復元
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: data/catalog.sqlite
+          key: catalog-db-v1-weekly-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            catalog-db-v1-
+
+      # DB が無いと統計が空になり、意味のない文を公開してしまう。何も書かずに成功で終える。
+      - name: DB の有無を確認
+        id: gate
+        env:
+          MATCHED: ${{ steps.restore.outputs.cache-matched-key }}
+        run: |
+          if [ -n "$MATCHED" ] && [ -f data/catalog.sqlite ]; then
+            echo "have_db=true" >> "$GITHUB_OUTPUT"
+            echo "復元した DB の cache: $MATCHED" | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "have_db=false" >> "$GITHUB_OUTPUT"
+            echo "週次の文: 見送り（DB の cache がありません。日次更新が実データで 1 回成功してから動きます）" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=DB の cache なし::復元できる DB の cache がないため、週次の文を作りませんでした。"
+          fi
+
+      - name: 派生データを計算する（API は呼ばない）
+        if: steps.gate.outputs.have_db == 'true'
+        run: npm run derive
+
+      - name: 探索用 JSON を書き出す
+        if: steps.gate.outputs.have_db == 'true'
+        run: npm run export
+
+      # ANTHROPIC_API_KEY はこのステップにだけ渡す。無ければ空文字になり、スクリプトはテンプレートの文を使う。
+      - name: 週次の文を作る
+        if: steps.gate.outputs.have_db == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npm run draft:weekly
+
+      - name: 変更があればコミットして main に push
+        if: steps.gate.outputs.have_db == 'true'
+        run: |
+          git add src/content/notes
+          if git diff --cached --quiet; then
+            echo "note の変更はありません。" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "週次の運営者からの文を更新"
+          git push origin HEAD:main
+          echo "note を main に push しました。" | tee -a "$GITHUB_STEP_SUMMARY"

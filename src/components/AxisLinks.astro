@@ -1,0 +1,51 @@
+---
+// 作品から各軸のページ（出演者・シリーズ・メーカー・ジャンル）へ回遊するためのリンク集。
+// URL は docs/02_設計方針.md の 2.1 に合わせる: /actress/{id}/ /series/{id}/ /maker/{id}/ /genre/{id}/
+// 主リンクは軸ページ。各チップの右に小さな「探索」リンクを1つだけ置き、/explore/ で同じ条件に絞り込めるようにする。
+// 見た目は mocks/v2/ui.js の detail() の .axis-links と同じ（common.css）。出演者・シリーズ・メーカーは種別の小さな見出し（.k）を添える。
+import type { NamedRef } from '../data/types.ts';
+
+interface Props {
+  actresses?: NamedRef[];
+  series?: NamedRef[];
+  makers?: NamedRef[];
+  genres?: NamedRef[];
+}
+
+const { actresses = [], series = [], makers = [], genres = [] } = Astro.props;
+
+/** 軸の並び順は、出演者 → シリーズ → メーカー → ジャンル（モックと同じ）。id か名前が空の参照と、同じ軸内の重複は除く */
+// 探索ページのクエリ名は AxisPage.astro の QUERY と同じ（出演者 act・シリーズ ser・メーカー mak・ジャンル g。値は名前）
+const AXES: [string, string, string, NamedRef[]][] = [
+  ['actress', '出演', 'act', actresses],
+  ['series', 'シリーズ', 'ser', series],
+  ['maker', 'メーカー', 'mak', makers],
+  ['genre', '', 'g', genres],
+];
+const links = AXES.flatMap(([axis, kind, q, refs]) => {
+  const seen = new Set<string>();
+  const out: { href: string; name: string; kind: string; explore: string }[] = [];
+  for (const r of refs) {
+    const name = (r.name ?? '').trim();
+    if (!r.id || name === '' || seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push({ href: `/${axis}/${encodeURIComponent(r.id)}/`, name, kind, explore: `/explore/?${q}=${encodeURIComponent(name)}` });
+  }
+  return out;
+});
+---
+
+{
+  links.length > 0 && (
+    <div class="axis-links" role="group" aria-label="この作品の出演者・シリーズ・メーカー・ジャンル">
+      {
+        links.map((l) => (
+          <span class="axis-chip">
+            <a href={l.href}>{l.kind && <span class="k">{l.kind}</span>}{l.name}</a>
+            <a class="ex" href={l.explore} aria-label={`${l.name}で探索して絞り込む`}>探索</a>
+          </span>
+        ))
+      }
+    </div>
+  )
+}

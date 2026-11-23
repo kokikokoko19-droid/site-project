@@ -1,0 +1,54 @@
+---
+// パンくず。全ページで同じ部品を使う（第三者レビュー A I9）。区切りは「›」で統一する。
+// 最後の項目は今いるページ（リンクにしない）。長い名前（作品名など）は max 文字で省略し、全文は title に入れる。
+// 構造化データ（BreadcrumbList）も同じ並びで出す。
+interface Crumb {
+  label: string;
+  /** 省略すると今いるページ（最後の項目）として扱う */
+  href?: string;
+}
+
+interface Props {
+  items: Crumb[];
+  /** 最後の項目の表示の上限（文字数）。既定 18 */
+  max?: number;
+}
+
+const { items, max = 18 } = Astro.props;
+
+const clip = (s: string, n: number): string => {
+  const chars = [...s.trim()];
+  return chars.length > n ? `${chars.slice(0, n).join('')}…` : s.trim();
+};
+const list = items.filter((c) => (c.label ?? '').trim() !== '');
+const lastIndex = list.length - 1;
+const base = Astro.site ?? Astro.url;
+const ld = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: list.map((c, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: c.label.trim(),
+    item: new URL(c.href ?? Astro.url.pathname, base).href,
+  })),
+};
+const ldJson = JSON.stringify(ld).replace(/</g, '\\u003c');
+---
+
+{
+  list.length > 0 && (
+    <nav class="crumb" aria-label="パンくずリスト">
+      <ol>
+        {list.map((c, i) =>
+          i === lastIndex || !c.href ? (
+            <li><span aria-current="page" title={i === lastIndex && [...c.label].length > max ? c.label : undefined}>{i === lastIndex ? clip(c.label, max) : c.label}</span></li>
+          ) : (
+            <li><a href={c.href}>{c.label}</a></li>
+          ),
+        )}
+      </ol>
+    </nav>
+  )
+}
+{list.length > 1 && <script is:inline type="application/ld+json" set:html={ldJson} />}

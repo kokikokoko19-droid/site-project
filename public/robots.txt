@@ -1,0 +1,7 @@
+# 全クローラー共通。中継ページ（/go/）とデータ（/data/）は巡回させない。
+User-agent: *
+Disallow: /go/
+Disallow: /data/
+
+# site は astro.config.mjs の値（いまは仮ドメイン）。本番のURLに替えるときは、この行も同じ値に合わせる。
+Sitemap: https://avmeguri.com/sitemap-index.xml

@@ -1,0 +1,63 @@
+---
+// 作品カードの格子。作品の配列を受け取り、WorkCard の表示形に直して .grid に並べる。
+// 文言は自動文（データ駆動テンプレ）だけで、公式の紹介文やレビュー本文は使わない。
+import type { DerivedLabel } from '../data/types.ts';
+import type { CatalogWork } from '../lib/catalog.ts';
+import { toCard } from '../lib/card.ts';
+import WorkCard from './WorkCard.astro';
+
+interface Props {
+  works: CatalogWork[];
+  /** 作品が0件のときに出す文言 */
+  empty?: string;
+  /** カードに出さないラベル（例: セール一覧では「セール中」） */
+  omitLabels?: DerivedLabel[];
+  /** 指定すると、各カードに順位（rankFrom から1ずつ増やす）を付ける */
+  rankFrom?: number;
+  /** 先頭の何枚を遅延読み込みしないか（画面の最初に見える分。既定 4） */
+  eager?: number;
+}
+
+const { works, empty = '該当する作品がありません。', omitLabels = [], rankFrom, eager = 4 } = Astro.props;
+
+// データ層の Work から、カードに必要な項目だけを取り出す（対応は lib/card.ts の toCard）
+const cards = works.map((w) => ({ work: toCard(w, { omitLabels }), href: `/v/${w.contentId}/` }));
+---
+
+{
+  cards.length > 0 ? (
+    <div class="grid">
+      {cards.map((c, i) => (
+        <WorkCard work={c.work} href={c.href} rank={rankFrom !== undefined ? rankFrom + i : undefined} eager={i < eager} />
+      ))}
+    </div>
+  ) : (
+    <div class="empty">
+      <p>{empty}</p>
+    </div>
+  )
+}
+
+<style is:global>
+  /* .chip は button 向けの指定（高さ・余白・文字の位置）なので、a 要素のリンクとして使うときの表示をここで補う。
+     チップをリンクにするページ（トップ・軸ページ・ランキング）はどれも WorkGrid を使うので、ここに置く。
+     （v2 では .chip の見た目は common.css 側。ここは a 要素向けの補足だけ） */
+  a.chip {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding-block: 4px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  a.chip:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  /* 名前のあとに添える件数 */
+  a.chip .n {
+    margin-left: 6px;
+    color: var(--fg2);
+    white-space: nowrap;
+  }
+</style>

@@ -1,0 +1,26 @@
+---
+// 404 ページ。ホスティングが存在しないURLに返す（ビルドすると dist/404.html になる）。
+// 検索結果に載せる意味がないので noindex にする。
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title="ページが見つかりません"
+  description="お探しのページは見つかりませんでした。探索ページから作品を探せます。"
+  noindex
+>
+  <section class="notfound">
+    <h1>ページが見つかりません</h1>
+    {/* 文と文の間に改行を入れると空白として表示されるため、1行で書く */}
+    <p class="muted">お探しのページは、移動または削除されたか、URLが違っている可能性があります。探索ページでは、出演者・シリーズ・メーカー・ジャンルの軸から作品を探せます。</p>
+    {/* 探索ページ（/explore/）が q を読む。ヘッダーの検索欄と同じ GET フォーム */}
+    <form class="search" action="/explore/" method="get" role="search" aria-label="作品を探す">
+      <input name="q" type="search" placeholder="タイトル・出演者・シリーズ・メーカーで検索" aria-label="作品を検索" />
+      <button class="btn" type="submit">検索</button>
+    </form>
+    <div class="row">
+      <a class="btn btn-cta" href="/explore/">探索ページへ</a>
+      <a class="btn" href="/">トップへ戻る</a>
+    </div>
+  </section>
+</Base>

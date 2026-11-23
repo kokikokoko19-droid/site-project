@@ -1,0 +1,75 @@
+---
+// サンプル画像（公式配信の直リンク）。一覧には小さい版（…/{cid}-N.jpg）を並べ、タップで大きい版を Lightbox で開く。
+// 小さい版が読めないときは onerror で大きい版に差し替える。規約により加工は拡大縮小のみ。切り取りはせず、枠の中に全体を収める（object-fit: contain）。
+// 画面の密度が 2 倍以上（スマホの大半）では srcset で大きい版を選ばせる。1 倍の画面では小さい版のままなので、枠の幅を 120px までに抑えて引き伸ばさない（v/[id].astro）。
+// 最初は FIRST 枚だけを出し、残りは「すべて見る」（details 要素。JS 無しでも開く）の中に入れる。閉じている間は読み込まれない。
+import Lightbox from './Lightbox.astro';
+import { sampleSmallUrl } from '../lib/format.ts';
+
+interface Props {
+  /** サンプル画像のURL（API の sampleImages。大きい版、無ければ小さい版）。0件なら何も出さない */
+  images?: string[];
+}
+
+const { images = [] } = Astro.props;
+const FIRST = 6;
+// 空文字などの無効な値は飛ばす
+const items = images
+  .filter((u) => typeof u === 'string' && u.trim() !== '')
+  .map((u, i) => {
+    const full = u.trim();
+    return { full, small: sampleSmallUrl(full) ?? full, n: i + 1 };
+  });
+const head = items.slice(0, FIRST);
+const rest = items.slice(FIRST);
+// 小さい版が読めないときは大きい版へ（1回だけ）。srcset を外さないと差し替えた src が使われない
+const FALLBACK = "this.onerror=null;this.removeAttribute('srcset');if(this.dataset.full&&this.src!==this.dataset.full)this.src=this.dataset.full";
+---
+
+{
+  items.length > 0 && (
+    <div class="gallery-wrap">
+      <div class="gallery">
+        {head.map((it) => (
+          <button type="button" class="g-item" data-lightbox-src={it.full} aria-label={`サンプル画像 ${it.n} を拡大`}>
+            <img src={it.small} srcset={`${it.small} 1x, ${it.full} 2x`} data-full={it.full} alt="" loading="lazy" decoding="async" onerror={FALLBACK} />
+          </button>
+        ))}
+      </div>
+      {rest.length > 0 && (
+        <details class="gallery-more">
+          <summary class="btn"><span class="when-closed">すべて見る（{items.length}枚）</span><span class="when-open">残りを閉じる</span></summary>
+          <div class="gallery">
+            {rest.map((it) => (
+              <button type="button" class="g-item" data-lightbox-src={it.full} aria-label={`サンプル画像 ${it.n} を拡大`}>
+                <img src={it.small} srcset={`${it.small} 1x, ${it.full} 2x`} data-full={it.full} alt="" loading="lazy" decoding="async" onerror={FALLBACK} />
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
+      <Lightbox />
+    </div>
+  )
+}
+
+<style is:global>
+  /* is:global にする理由: scoped だと全要素に属性が付き、数千ページ分のHTMLが膨らむ。
+     .gallery は作品ページのサンプル画像でしか使わない */
+  .gallery-wrap { display: grid; gap: calc(var(--sp) * 1.5); }
+  .gallery .g-item { aspect-ratio: 4 / 3; max-width: 100%; padding: 0; border: 0; background: var(--bg2); box-shadow: inset 0 0 0 1px rgba(255,255,255,.05); border-radius: 2px; display: flex; align-items: center; justify-content: center; color: var(--fg2); font-size: 11px; cursor: zoom-in; overflow: hidden; }
+  .gallery .g-item:hover { box-shadow: inset 0 0 0 1px rgba(217,164,65,.6); }
+  .gallery img {
+    max-width: 100%;
+    max-height: 100%;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  .gallery-more { display: grid; gap: calc(var(--sp) * 1.5); }
+  .gallery-more > summary { list-style: none; justify-self: start; }
+  .gallery-more > summary::-webkit-details-marker { display: none; }
+  .gallery-more .when-open, .gallery-more[open] .when-closed { display: none; }
+  .gallery-more[open] .when-open { display: inline; }
+  .gallery-more[open] > summary { order: 2; }
+</style>

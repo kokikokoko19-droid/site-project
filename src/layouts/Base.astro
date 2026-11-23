@@ -1,0 +1,231 @@
+---
+// 全ページ共通のレイアウト。ヘッダー、PR帯、フッター、年齢確認オーバーレイを持つ。
+// 見た目と振る舞いは mocks/v2/ui.js の shell() に合わせている。
+import '../styles/tokens.css';
+import '../styles/common.css';
+import AdSlot from '../components/AdSlot.astro';
+import MobileNav from '../components/MobileNav.astro';
+import Mark from '../components/Mark.astro';
+import { titleFontHref } from '../lib/font-text.ts';
+
+interface Props {
+  /** ページ名。後ろにサイト名を付けて <title> にする。未指定ならサイト名のみ */
+  title?: string;
+  description?: string;
+  /** 作品データの最終更新日時（ISO 8601）。未指定の間は「準備中」と表示する */
+  dataUpdatedAt?: string;
+  /** 確認用。広告スロットの枠を表示する（既定は非表示） */
+  showAdSlots?: boolean;
+  /** OGP の種別。ガイド・特集などの記事は 'article'、それ以外は 'website'（既定） */
+  ogType?: 'website' | 'article';
+  /** OGP 画像。絶対URL、または '/' から始まるパス。未指定なら既定の /og-default.png（1200×630） */
+  ogImage?: string;
+  /** true にすると検索結果に載せない（中継ページ /go/ と 404 用）。既定は載せる */
+  noindex?: boolean;
+}
+
+const SITE_NAME = 'AVめぐり';
+const SITE_TAGLINE = 'AV女優とおすすめ作品を見て回るカタログ';
+// 既定の OGP 画像（public/og-default.png。大きさは撮影時に 1200×630 で固定）
+const DEFAULT_OG_IMAGE = '/og-default.png';
+const {
+  title,
+  description = 'AV女優とおすすめ作品を見て回るカタログ。出演者・シリーズ・メーカー・ジャンルの軸から、評価と新しさで並べ替えて探せます。',
+  dataUpdatedAt,
+  showAdSlots = false,
+  ogType = 'website',
+  ogImage = DEFAULT_OG_IMAGE,
+  noindex = false,
+} = Astro.props;
+
+const pageTitle = title ? `${title}｜${SITE_NAME}` : `${SITE_NAME}｜${SITE_TAGLINE}`;
+const { pathname } = Astro.url;
+
+// canonical と og:url。パスは Astro.url のもの。
+// origin は astro.config の site を使い、開発サーバーでも localhost にならないようにする
+// （ビルド時は Astro.url と同じ値になる）。site 未設定なら Astro.url の origin にする。
+const origin = Astro.site ?? Astro.url;
+const canonicalUrl = new URL(pathname, origin).href;
+
+// og:image は絶対URLにそろえる。不正な値のときは出さない
+function toAbsoluteUrl(value?: string) {
+  if (!value) return undefined;
+  try {
+    return new URL(value, origin).href;
+  } catch {
+    return undefined;
+  }
+}
+const ogImageUrl = toAbsoluteUrl(ogImage);
+const ogImageIsDefault = ogImage === DEFAULT_OG_IMAGE;
+
+// 軸メニュー。URL は docs/02_設計方針.md の 2.1 に合わせる。
+// 特集・ハブ記事（使い方）は一覧ページのURLが未定義のため、確定後に追加する。
+// （幅960px未満のメニューは components/MobileNav.astro が別に持つ）
+const nav = [
+  { href: '/', label: 'トップ' },
+  { href: '/explore/', label: '探索' },
+  { href: '/stroll/', label: 'ぶらぶら' },
+  { href: '/new/', label: '新着' },
+  { href: '/sale/', label: 'セール' },
+  { href: '/ranking/', label: 'ランキング' },
+  { href: '/feature/', label: '特集' },
+  { href: '/guide/', label: 'ガイド' },
+];
+
+// データ更新日時を日本時間で整える。未指定や不正な値は null（表示は「準備中」）
+function formatUpdated(iso?: string) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const text = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(d);
+  return { text, iso: d.toISOString() };
+}
+const updated = formatUpdated(dataUpdatedAt);
+
+// 計測（GA4）。PUBLIC_GA4_ID が設定されているときだけ、gtag.js の読み込みと設定を出す。
+// 未設定（合成データ・開発時）や、G- で始まる形式でない値のときは何も出さない。
+// 広告向けの機能は使わない（docs/02_設計方針.md の10章）。イベントの送信は public/analytics/events.js が行う。
+const rawGa4Id = import.meta.env.PUBLIC_GA4_ID;
+// 仮公開のあいだ検索に載せない切替（docs/11 段階1）。本公開のときに外す
+const siteNoindex = import.meta.env.PUBLIC_NOINDEX === '1';
+const ga4Id = typeof rawGa4Id === 'string' && /^G-[A-Za-z0-9]{4,20}$/.test(rawGa4Id.trim()) ? rawGa4Id.trim() : undefined;
+const ga4Snippet = ga4Id
+  ? `window.dataLayer = window.dataLayer || [];
+function gtag() { dataLayer.push(arguments); }
+gtag('js', new Date());
+gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_signals: false, allow_ad_personalization_signals: false });`
+  : '';
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {/* 配色は暗い表示のみ（設計方針 6.2）。入力欄やスクロールバーも暗くする */}
+    <meta name="color-scheme" content="dark" />
+    {/* 固定の見出しの明朝（Shippori Mincho B1）。text= で文字を絞った 1 本だけ読み込む（src/lib/font-text.ts）。表示が遅れても代替の明朝で読める（display=swap） */}
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href={titleFontHref()} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    {/* 成人向けサイトであることを検索エンジンなどに伝える */}
+    <meta name="rating" content="adult" />
+    {/* 既定は index。中継ページなど載せたくないページだけ noindex を指定する。
+        仮公開（公開前の国内確認）の間は PUBLIC_NOINDEX=1 で全ページを noindex にする */}
+    {/* 薄いページや仮公開では noindex にするが、リンク先は辿らせる（follow）。/go/ は Base を使わず別に nofollow */}
+    {(noindex || siteNoindex) && <meta name="robots" content="noindex, follow" />}
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content={ogType} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:site_name" content={SITE_NAME} />
+    {ogImageUrl && <meta property="og:image" content={ogImageUrl} />}
+    {ogImageUrl && ogImageIsDefault && <meta property="og:image:width" content="1200" />}
+    {ogImageUrl && ogImageIsDefault && <meta property="og:image:height" content="630" />}
+    <meta name="twitter:card" content="summary_large_image" />
+    {/* 計測（GA4）。PUBLIC_GA4_ID があるときだけ出す。イベントの送信は /analytics/events.js（gtag が無ければ記録するだけ） */}
+    {ga4Id && <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${ga4Id}`}></script>}
+    {ga4Id && <script is:inline set:html={ga4Snippet} />}
+    <script is:inline defer src="/analytics/events.js"></script>
+    {/* ページごとの JSON-LD などは、ここに slot="head" で差し込む */}
+    <slot name="head" />
+  </head>
+  <body class:list={{ 'show-ad-slots': showAdSlots }}>
+    {/* 年齢確認。本文より先に置き、初回表示で本文が見えてしまうのを防ぐ */}
+    <div class="age-gate" id="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-title">
+      <div class="age-box">
+        <Mark />
+        <h2 id="age-title">年齢確認</h2>
+        <p class="muted">このサイトは成人向けの作品情報を扱います。<br />あなたは18歳以上ですか。</p>
+        <div class="row">
+          <button class="btn btn-cta" id="age-yes" type="button">18歳以上です</button>
+          <button class="btn" id="age-no" type="button">18歳未満です</button>
+        </div>
+      </div>
+    </div>
+    <script is:inline>
+      (function () {
+        var gate = document.getElementById('age-gate');
+        var yes = document.getElementById('age-yes');
+        var ok = false;
+        try { ok = localStorage.getItem('age_ok') === '1'; } catch (e) {}
+        if (!ok) { gate.classList.add('open'); yes.focus(); }
+        yes.addEventListener('click', function () {
+          try { localStorage.setItem('age_ok', '1'); } catch (e) {}
+          gate.classList.remove('open');
+        });
+        document.getElementById('age-no').addEventListener('click', function () {
+          location.href = 'about:blank';
+        });
+      })();
+    </script>
+
+    <header class="site-header">
+      <div class="wrap">
+        <a class="logo" href="/"><Mark />AVめぐり<span class="tagline">{SITE_TAGLINE}</span></a>
+        {/* 探索ページ（/explore/）が q を読む。JS なしでも送信できる GET フォーム */}
+        <form class="search" action="/explore/" method="get" role="search">
+          <input name="q" type="search" placeholder="タイトル・出演者・シリーズ・メーカーで検索" aria-label="検索" />
+        </form>
+        <nav class="nav" aria-label="軸メニュー">
+          {nav.map((item) => (
+            <a href={item.href} aria-current={pathname === item.href ? 'page' : undefined}>{item.label}</a>
+          ))}
+        </nav>
+        {/* 幅960px未満だけ表示するメニュー（PC では CSS で隠れる） */}
+        <MobileNav />
+      </div>
+    </header>
+    <div class="pr-band">
+      <div class="wrap"><b>PR</b><span class="pr-long">本サイトはアフィリエイト広告（PR）を含みます。作品リンクは FANZA のアフィリエイトです</span><span class="pr-short">アフィリエイト広告を含みます</span></div>
+    </div>
+
+    <main class="wrap" id="main"><slot /></main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="cols">
+          <div>
+            <div class="brand"><Mark />{SITE_NAME}</div>
+            <p>{SITE_TAGLINE}。画像と動画は公式の配信元から直接表示しています（権利は各権利者に帰属します）。18歳未満の方の閲覧はお断りします。</p>
+            <p>データ更新: {updated ? <time datetime={updated.iso}>{updated.text}</time> : '準備中'}</p>
+            {/* クレジット表記は DMM Web サービスの規定どおり（docs/10）。文言とリンク先は改変しない */}
+            <p class="credit">Powered by <a href="https://affiliate.dmm.com/api/">FANZA Webサービス</a></p>
+          </div>
+          <div class="links-group">
+          {/* 一覧ページ（軸の索引）。法務リンクの横に置く */}
+          <nav class="links" aria-label="一覧">
+            <a href="/actress/">出演者一覧</a>
+            <a href="/genre/">ジャンル一覧</a>
+            <a href="/maker/">メーカー一覧</a>
+            <a href="/series/">シリーズ一覧</a>
+          </nav>
+          <div class="links">
+            <a href="/about/">運営者情報</a>
+            <a href="/terms/">利用規約</a>
+            <a href="/privacy/">プライバシーポリシー</a>
+            <a href="/removal/">掲載停止のご依頼</a>
+            <a href="/about/#contact">お問い合わせ</a>
+          </div>
+          </div>
+        </div>
+        {/* scoped な <style> は全要素に属性が付き、HTMLが膨らむので、モックと同じ inline style にする */}
+        <div style="margin-top: 16px"><AdSlot name="footer" /></div>
+      </div>
+    </footer>
+  </body>
+</html>

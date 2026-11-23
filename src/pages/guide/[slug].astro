@@ -1,0 +1,43 @@
+---
+// ガイド記事のページ（/guide/{slug}/）。本文は src/content/guide/{slug}.md。
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import '../../styles/article.css';
+
+// 本番ビルドでは draft のパスを作らない。開発時は下書きも開ける（一覧と同じ条件）
+export async function getStaticPaths() {
+  const entries = await getCollection('guide', ({ data }) => !import.meta.env.PROD || !data.draft);
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { data } = entry;
+const { Content } = await render(entry);
+
+// 日付は UTC で整える（ビルドする環境のタイムゾーンで1日ずれないように）
+const fmt = new Intl.DateTimeFormat('ja-JP', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' });
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+// 更新日は、公開日と違うときだけ出す
+const updated = data.updated && iso(data.updated) !== iso(data.date) ? data.updated : null;
+---
+
+<Base title={data.title} description={data.description}>
+  <nav class="crumb" aria-label="パンくず">
+    <a href="/">トップ</a><span aria-hidden="true"> / </span><a href="/guide/">ガイド</a><span aria-hidden="true"> / </span><span aria-current="page">{data.title}</span>
+  </nav>
+
+  <article class="article">
+    <header class="article-head">
+      <p class="kind">ガイド{data.draft && <span class="badge-draft">下書き</span>}</p>
+      <h1>{data.title}</h1>
+      <p class="muted article-meta">
+        <span>公開 <time datetime={iso(data.date)}>{fmt.format(data.date)}</time></span>
+        {updated && <span>更新 <time datetime={iso(updated)}>{fmt.format(updated)}</time></span>}
+      </p>
+    </header>
+
+    <div class="prose"><Content /></div>
+
+    <p class="article-foot"><a href="/guide/">ガイド一覧へ戻る</a></p>
+  </article>
+</Base>

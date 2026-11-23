@@ -1,0 +1,140 @@
+---
+// トップの目玉（横に送るスライド）。中身は lib/featured.ts の pickFeatured（運営者の指定＋「高評価」で補う）。
+// 土台は CSS の scroll-snap の横スクロールで、指で送れて JS 無しでも横並びの一覧として読める。
+// 自動送りはしない（運営者決定）。PC は左右の矢印と「1 / 5」の番号、両幅で下に短い線のインジケーター。
+// 表紙は公式配信の横長ジャケット（imageLarge）の直リンクを比率どおりに出す（object-fit: contain。切り取らない）。
+// 補った作品の眉見出しは「今週の高評価」とし、「運営者が選ぶ」は運営者の指定だけに付ける（第三者レビュー B-7）。
+import type { FeaturedItem } from '../lib/featured.ts';
+import { minutes } from '../lib/format.ts';
+import Mark from './Mark.astro';
+
+interface Props {
+  items: FeaturedItem[];
+}
+const { items } = Astro.props;
+const total = items.length;
+
+const slides = items.map(({ work: w, source, comment }, i) => {
+  const rated = w.reviewCount > 0 && typeof w.reviewAvg === 'number' && Number.isFinite(w.reviewAvg);
+  return {
+    id: w.contentId,
+    n: i + 1,
+    title: w.title,
+    cover: w.imageLarge || w.imageList || null,
+    cast: w.actresses.map((a) => a.name).join('、'),
+    maker: w.makers[0]?.name ?? '',
+    min: minutes(w.volumeMin),
+    rate: rated ? { avg: w.reviewAvg!.toFixed(1), count: w.reviewCount } : null,
+    eyebrow: source === 'pick' ? '運営者が選ぶ' : '今週の高評価',
+    comment,
+    // /go/{id}/ は outboundUrl がある作品にしか作られない
+    hasLink: typeof w.outboundUrl === 'string' && w.outboundUrl.length > 0,
+  };
+});
+---
+
+{
+  total > 0 && (
+    <section class="feature-carousel" aria-roledescription="カルーセル" aria-label="今週の目玉">
+      <div class="fc-track" tabindex="0">
+        {slides.map((s) => (
+          <article class="fc-slide" role="group" aria-roledescription="スライド" aria-label={`${s.n} / ${total}`}>
+            <a class="fc-cover" href={`/v/${s.id}/`} tabindex="-1" aria-hidden="true">
+              {/* 公式の横長ジャケットは 800×538 前後。枠の比率をそろえ、画像は contain で全体を収める */}
+              {s.cover && (
+                <img
+                  src={s.cover}
+                  alt=""
+                  width="800"
+                  height="538"
+                  decoding="async"
+                  loading={s.n === 1 ? 'eager' : 'lazy'}
+                  fetchpriority={s.n === 1 ? 'high' : undefined}
+                />
+              )}
+            </a>
+            <div class="fc-text">
+              <span class="eyebrow"><Mark />{s.eyebrow}</span>
+              <h2 class="fc-title"><a href={`/v/${s.id}/`}>{s.title}</a></h2>
+              <div class="fc-meta">
+                {s.cast && <span>出演 <b>{s.cast}</b></span>}
+                {s.maker && <span>メーカー <b>{s.maker}</b></span>}
+                {s.min && <span>収録 <b>{s.min}</b></span>}
+                {s.rate && <span class="rate">★ {s.rate.avg} <span class="dim">{s.rate.count}件</span></span>}
+              </div>
+              {s.comment && <p class="fc-comment">{s.comment}</p>}
+              <div class="fc-actions">
+                <a class="btn" href={`/v/${s.id}/`}>作品ページへ</a>
+                {s.hasLink && (
+                  <a class="btn btn-cta" href={`/go/${s.id}/`} rel="sponsored nofollow" data-cta="work" data-cta-pos="hero">FANZAで見る <small>PR</small></a>
+                )}
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+      {
+        total > 1 && (
+          <div class="fc-ctrl">
+            <button class="fc-arrow" type="button" data-dir="-1" aria-label="前のスライド">‹</button>
+            <div class="fc-dots" aria-hidden="true">
+              {slides.map((s) => <span class:list={['fc-dot', { on: s.n === 1 }]}></span>)}
+            </div>
+            <span class="fc-count num" aria-live="polite"><span class="fc-now">1</span> / {total}</span>
+            <button class="fc-arrow" type="button" data-dir="1" aria-label="次のスライド">›</button>
+          </div>
+        )
+      }
+    </section>
+  )
+}
+
+<script>
+  // 矢印・番号・インジケーターの更新だけを行う。自動送りはしない。
+  for (const root of document.querySelectorAll<HTMLElement>('.feature-carousel')) {
+    const track = root.querySelector<HTMLElement>('.fc-track');
+    const ctrl = root.querySelector<HTMLElement>('.fc-ctrl');
+    if (!track || !ctrl || track.children.length < 2) continue;
+    const slides = [...track.querySelectorAll<HTMLElement>('.fc-slide')];
+    const dots = [...root.querySelectorAll<HTMLElement>('.fc-dot')];
+    const now = root.querySelector<HTMLElement>('.fc-now');
+    const [prev, next] = [...root.querySelectorAll<HTMLButtonElement>('.fc-arrow')];
+    // 操作部は場所だけ先に取っておき（表示のずれを出さない）、JS が動いたら見せる
+    root.classList.add('is-ready');
+    let cur = 0;
+    const current = () => {
+      // 左端に最も近いスライドを現在とする
+      const x = track.scrollLeft;
+      const pos = (s: HTMLElement) => s.offsetLeft - slides[0].offsetLeft;
+      let best = 0;
+      slides.forEach((s, i) => {
+        if (Math.abs(pos(s) - x) < Math.abs(pos(slides[best]) - x)) best = i;
+      });
+      return best;
+    };
+    const paint = () => {
+      cur = current();
+      dots.forEach((d, i) => d.classList.toggle('on', i === cur));
+      if (now) now.textContent = String(cur + 1);
+      prev.disabled = cur === 0;
+      next.disabled = cur === slides.length - 1;
+    };
+    const go = (i: number) => {
+      const s = slides[Math.max(0, Math.min(slides.length - 1, i))];
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      track.scrollTo({ left: s.offsetLeft - slides[0].offsetLeft, behavior: reduce ? 'auto' : 'smooth' });
+    };
+    prev.addEventListener('click', () => go(cur - 1));
+    next.addEventListener('click', () => go(cur + 1));
+    let raf = 0;
+    track.addEventListener('scroll', () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(paint);
+    }, { passive: true });
+    track.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') { e.preventDefault(); go(cur + 1); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); go(cur - 1); }
+    });
+    paint();
+  }
+</script>

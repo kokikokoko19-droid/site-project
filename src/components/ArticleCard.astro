@@ -1,0 +1,30 @@
+---
+// ガイド記事・特集のカード。一覧ページとトップの「特集とガイド」で使う。
+// 見た目は common.css の .hub a（親に .hub を置くこと）。種別・題名・説明・日付を縦に並べる。
+import '../styles/article.css';
+
+interface Props {
+  href: string;
+  title: string;
+  description: string;
+  /** 公開日（UTC の 0 時として読まれた値） */
+  date: Date;
+  /** 種別の表示（「特集」「ガイド」） */
+  kind: string;
+  /** 下書き。開発時の一覧だけに「下書き」バッジを付ける（本番ビルドは draft を出さない） */
+  draft?: boolean;
+}
+
+const { href, title, description, date, kind, draft = false } = Astro.props;
+
+// 日付は UTC で整える（ビルドする環境のタイムゾーンで1日ずれないように）
+const dateText = new Intl.DateTimeFormat('ja-JP', { timeZone: 'UTC', year: 'numeric', month: 'long', day: 'numeric' }).format(date);
+const dateIso = date.toISOString().slice(0, 10);
+---
+
+<a href={href}>
+  <span class="kind">{kind}{draft && <span class="badge-draft">下書き</span>}</span>
+  <span class="title">{title}</span>
+  <span class="muted">{description}</span>
+  <time class="muted" datetime={dateIso}>{dateText}</time>
+</a>

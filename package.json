@@ -1,0 +1,27 @@
+{
+  "name": "site-project",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "prebuild": "node scripts/copy-export.mjs",
+    "build": "astro build",
+    "postbuild": "node scripts/check-dist.mjs",
+    "preview": "astro preview",
+    "check": "node scripts/check-dist.mjs",
+    "test": "node --experimental-strip-types --test \"tests/**/*.ts\"",
+    "ingest": "node --experimental-strip-types src/data/cli.ts ingest",
+    "derive": "node --experimental-strip-types src/data/cli.ts derive",
+    "export": "node --experimental-strip-types src/data/cli.ts export",
+    "x:post": "node --experimental-strip-types src/x/cli.ts post",
+    "draft:weekly": "node --experimental-strip-types scripts/draft-weekly.ts",
+    "draft:feature": "node --experimental-strip-types scripts/draft-feature.ts"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "3.7.4",
+    "astro": "7.4.1"
+  }
+}

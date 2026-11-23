@@ -1,0 +1,74 @@
+---
+// 作品ランキングの共通部分（/ranking/ は評価順、/ranking/popular/ は人気順）。先頭が _ のファイルはページにならない。
+// 上部に 2 つのタブ（別 URL）。順位の数字は WorkGrid の rankFrom で付ける（第三者レビュー A I4、B-13）。
+import Base from '../../layouts/Base.astro';
+import AdSlot from '../../components/AdSlot.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+import WorkGrid from '../../components/WorkGrid.astro';
+import { loadCatalog } from '../../lib/catalog.ts';
+import type { CatalogWork } from '../../lib/catalog.ts';
+
+interface Props {
+  kind: 'rating' | 'popular';
+}
+const { kind } = Astro.props;
+
+const COUNT = 30;
+const catalog = loadCatalog();
+const rankings = catalog.meta.rankings;
+
+const TABS = [
+  { kind: 'rating', href: '/ranking/', label: '評価順', note: 'レビュー評価の高い順です。レビュー件数が少ない作品は、件数に応じて評価を控えめにしています。' },
+  { kind: 'popular', href: '/ranking/popular/', label: '人気順', note: 'FANZA の人気順位の高い順です。' },
+] as const;
+const tab = TABS.find((t) => t.kind === kind)!;
+
+/** ID の並びを作品に引き直して上位 COUNT 件にする。存在しない ID は飛ばす */
+function pick(ids: string[]): CatalogWork[] {
+  const out: CatalogWork[] = [];
+  for (const id of ids) {
+    const w = catalog.byId.get(id);
+    if (w) out.push(w);
+    if (out.length >= COUNT) break;
+  }
+  return out;
+}
+const works = rankings ? pick(kind === 'rating' ? rankings.byRating : rankings.byPopularity) : [];
+const title = kind === 'rating' ? 'ランキング（評価順）' : 'ランキング（人気順）';
+---
+
+<Base
+  title={title}
+  description={`作品の${tab.label}ランキング上位${COUNT}件です。${tab.note}`}
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  <Breadcrumb items={kind === 'rating' ? [{ href: '/', label: 'トップ' }, { label: 'ランキング' }] : [{ href: '/', label: 'トップ' }, { href: '/ranking/', label: 'ランキング' }, { label: '人気順' }]} />
+  <section class="section-s" style="margin-top: 8px">
+    <h1>ランキング</h1>
+    <nav class="rank-tabs" aria-label="ランキングの種類">
+      {TABS.map((t) => (
+        <a class="chip" href={t.href} aria-current={t.kind === kind ? 'page' : undefined}>{t.label}</a>
+      ))}
+    </nav>
+    <p class="muted">{tab.note}</p>
+    <p class="row">
+      <a class="more-link" href="/ranking/actress/">出演者ランキング →</a>
+      <a class="more-link" href="/new/">新着は新着ページへ →</a>
+    </p>
+  </section>
+
+  <section class="section-s">
+    {
+      rankings === null ? (
+        <div class="empty">
+          <h2>ただいま準備中です</h2>
+          <p class="muted">ランキングのデータができ次第、ここに並びます。</p>
+        </div>
+      ) : (
+        <WorkGrid works={works} empty="この順位の作品はまだありません。" rankFrom={1} eager={4} />
+      )
+    }
+  </section>
+
+  <AdSlot name="ranking-bottom" />
+</Base>

@@ -1,0 +1,214 @@
+---
+// トップ。「コーナーに入った瞬間」（docs/08 8 章）: 入口チップ／目玉（カルーセル）／運営者から／棚が続く／索引／特集とガイド。
+// 棚は 今日の発見 → 新入荷 → よく見られている（返却棚。人気順）→ セール → ジャンル別 3 → 出演者別 2。
+// ジャンル別・出演者別は作品数の多い上位から日替わり（src/lib/shelves.ts。日付からの決定的な選び方）。
+// 各棚の末尾に「この棚をもっと見る →」。運営者の一言（config/featured.json の comment）は、その作品が入っている棚の見出しに添える。
+// 見出しは大中小の 3 段、セクションの間隔は広い（80px）・狭い（40px）の 2 種（第三者レビュー B-5）
+import Base from '../layouts/Base.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { getCollection } from 'astro:content';
+import ArticleCard from '../components/ArticleCard.astro';
+import FeatureCarousel from '../components/FeatureCarousel.astro';
+import OperatorNote from '../components/OperatorNote.astro';
+import Shelf from '../components/Shelf.astro';
+import featuredConfig from '../../config/featured.json';
+import { loadCatalog } from '../lib/catalog.ts';
+import { pickFeatured } from '../lib/featured.ts';
+import { fmtDate, ymd } from '../lib/format.ts';
+import { jstToday, splitNew } from '../lib/newlist.ts';
+import { commentMap, dailyAxisShelves, popularWorks, shelfPop } from '../lib/shelves.ts';
+import type { ShelfDef } from '../lib/shelves.ts';
+
+const catalog = loadCatalog();
+
+// 目玉。運営者の指定（config/featured.json）を先に、足りない枠は「高評価」で補って最大5件
+const featured = pickFeatured(catalog, featuredConfig);
+const featuredIds = new Set(featured.map((f) => f.work.contentId));
+
+// 今日の発見は meta.todays の作品から、目玉と重ならないものを最大10件。6件に満たなければ「定番」「高評価」で補う
+const DISCOVER_MIN = 6, DISCOVER_MAX = 10;
+const discoveries = catalog.todays().filter((w) => !featuredIds.has(w.contentId)).slice(0, DISCOVER_MAX);
+if (discoveries.length < DISCOVER_MIN) {
+  for (const w of [...catalog.byLabel('定番'), ...catalog.byLabel('高評価')]) {
+    if (discoveries.length >= DISCOVER_MIN) break;
+    if (!featuredIds.has(w.contentId) && !discoveries.includes(w)) discoveries.push(w);
+  }
+}
+
+// 棚の件数（見出しに添える）。新着は直近30日の配信、セールはセール中の全件
+const today = jstToday();
+const newCount = splitNew(catalog.recent(), today).recent.length;
+const saleCount = catalog.onSale().length;
+const popular = popularWorks(catalog);
+
+// 棚の並び。今日の発見だけは見出しを大にする（B-5）。表紙は各棚 10 枚
+const PER = 10;
+const shelves: (ShelfDef & { tag?: boolean; size?: 'l' | 's' })[] = [
+  { key: 'today', kind: 'today', title: '今日の発見', count: discoveries.length, href: '/explore/', works: discoveries, size: 'l' },
+  { key: 'new', kind: 'new', title: '新入荷', count: newCount, href: '/new/', works: catalog.recent(PER) },
+  { key: 'popular', kind: 'popular', title: 'よく見られている', count: popular.length, href: '/ranking/popular/', works: popular.slice(0, PER) },
+  { key: 'sale', kind: 'sale', title: 'セール', count: saleCount, href: '/sale/', works: catalog.onSale(PER), tag: true },
+  ...dailyAxisShelves(catalog, 'genre', today, { n: 3, pool: 12, per: PER }),
+  ...dailyAxisShelves(catalog, 'actress', today, { n: 2, pool: 10, per: PER }),
+].filter((sh) => sh.works.length > 0);
+// 運営者の一言は、その作品が入っている最初の棚にだけ添える（同じ一言を何段も繰り返さない）
+const comments = commentMap(featuredConfig);
+const pops = shelves.map((sh) => {
+  const pop = shelfPop(sh.works, comments);
+  if (pop) for (const [id, c] of comments) if (c === pop) comments.delete(id);
+  return pop;
+});
+
+// 入口チップ（ヘッダー直下）
+const entries = [
+  { href: '/stroll/', label: 'ぶらぶらする', strong: true },
+  { href: '/explore/', label: '探索' },
+  { href: '/new/', label: '新着' },
+  { href: '/sale/', label: 'セール' },
+  { href: '/ranking/', label: 'ランキング' },
+  { href: '/actress/', label: '出演者一覧' },
+];
+
+// 運営者の手紙の日付は、データの最終取り込み日
+const letterDate = fmtDate(ymd(catalog.meta.lastIngestAt));
+
+// 索引（軸の入口）。件数と、作品数の多い上位5件を出し、末尾から軸の一覧ページ（/actress/ など）へ
+const TOP_AXES = 5;
+const axes = [
+  { key: 'actress', label: '出演者', unit: '人', index: catalog.byActress, names: catalog.refNames.actress },
+  { key: 'series', label: 'シリーズ', unit: '件', index: catalog.bySeries, names: catalog.refNames.series },
+  { key: 'maker', label: 'メーカー', unit: '社', index: catalog.byMaker, names: catalog.refNames.maker },
+  { key: 'genre', label: 'ジャンル', unit: '種', index: catalog.byGenre, names: catalog.refNames.genre },
+].map((a) => ({
+  key: a.key,
+  label: a.label,
+  unit: a.unit,
+  total: a.index.size,
+  top: [...a.index]
+    .sort((x, y) => y[1].length - x[1].length) // 同数は索引に入った順（新しい作品側）のまま
+    .slice(0, TOP_AXES)
+    .map(([id, works]) => ({ id, name: a.names.get(id) ?? id, count: works.length })),
+}));
+
+// 特集とガイドは運営者が書く（src/content/）。最新の特集1件・ガイド2件を出す（棚が主役なので縮める）。
+// 本番ビルド（import.meta.env.PROD）では draft を除き、開発時は下書きも出す（「下書き」バッジ付き）
+const visible = ({ data }: { data: { draft: boolean } }) => !import.meta.env.PROD || !data.draft;
+type Dated = { id: string; data: { date: Date } };
+const newest = (a: Dated, b: Dated) => b.data.date.valueOf() - a.data.date.valueOf() || a.id.localeCompare(b.id);
+const features = (await getCollection('feature', visible)).sort(newest).slice(0, 1);
+const guides = (await getCollection('guide', visible)).sort(newest).slice(0, 2);
+
+// 公開できる記事が0件の間は、仮文のカードを出す（特集とガイドを別々に判定する）。
+// リンク先は一覧ページで、一覧には「準備中」と出る
+const featurePlaceholders = [
+  { title: '（特集タイトル）', text: '運営者が選んだ作品群と、その理由を書く場所です。' },
+];
+const guidePlaceholders = [
+  { title: 'このサイトの使い方', text: '探索ページの重みと絞り込みの考え方。' },
+  { title: 'はじめての1本の選び方', text: '「初見向け」ラベルの意味と選び方。' },
+];
+---
+
+<Base
+  description="AV女優とおすすめ作品を見て回るカタログ。出演者・シリーズ・メーカー・ジャンルの軸から探せます。今日の発見、新着、セール中の作品も確認できます。"
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  {/* ページの見出し（h1）。ロゴはリンクなので、検索向けに説明文を h1 にする。ヘッダーのタグラインとは別の文にする（B-11） */}
+  <h1 class="site-lead">AV女優と作品を、出演者・シリーズ・メーカーの軸から見て回る</h1>
+
+  <nav class="entry-chips" aria-label="入口">
+    {entries.map((e) => <a href={e.href} class:list={{ strong: e.strong }}>{e.label}</a>)}
+  </nav>
+
+  <FeatureCarousel items={featured} />
+
+  <section class="section-s">
+    <div class="letter">
+      {/* 最新の note（src/content/notes/）を出す。無い間は仮文。週次の自動生成は scripts/draft-weekly.ts（docs/07 10 章） */}
+      <OperatorNote
+        fallback="（ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。自動生成ではなく、人の声が最初に目に入るようにします。）"
+        fallbackDate={letterDate || undefined}
+      />
+    </div>
+  </section>
+
+  {/* ぶらぶらモードの入口。棚が続く前の目立つ位置に置く */}
+  <p class="stroll-door"><a class="btn" href="/stroll/">ぶらぶらする<span>棚を 1 本ずつ眺めて回る →</span></a></p>
+
+  {
+    shelves.length > 0 ? (
+      shelves.map((sh, i) => (
+        <section class:list={['shelf-row', { discover: sh.kind === 'today' }]}>
+          <Shelf
+            works={sh.works}
+            title={sh.title}
+            count={sh.count}
+            size={sh.size}
+            tag={sh.tag}
+            pop={pops[i]}
+            more={sh.href}
+            eager={i === 0 ? 4 : 0}
+          />
+        </section>
+      ))
+    ) : (
+      <div class="empty"><p>作品データを準備中です。</p></div>
+    )
+  }
+
+  <section class="section-l">
+    <div class="section-head">
+      <h2 class="h-m">索引</h2>
+    </div>
+    {/* .entry は計測（analytics/events.js の axis_nav）が見るクラス */}
+    <div class="index entry">
+      {axes.map((a) => (
+        <div>
+          <h3>{a.label}<b>{a.total}{a.unit}</b></h3>
+          {
+            a.top.length > 0 && (
+              <ol>
+                {a.top.map((t) => (
+                  <li><a href={`/${a.key}/${t.id}/`}>{t.name}<span>{t.count}作品</span></a></li>
+                ))}
+              </ol>
+            )
+          }
+          <a class="more" href={`/${a.key}/`}>{a.label}の一覧へ →</a>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="section-s">
+    <div class="section-head">
+      <h2 class="h-m">特集とガイド</h2>
+      <span class="row"><a href="/feature/">特集一覧 →</a><a href="/guide/">ガイド一覧 →</a></span>
+    </div>
+    <div class="hub2">
+      <div class="hub">
+        {features.length > 0
+          ? features.map((e) => (
+              <ArticleCard href={`/feature/${e.id}/`} title={e.data.title} description={e.data.description} date={e.data.date} kind="特集" draft={e.data.draft} />
+            ))
+          : featurePlaceholders.map((f) => (
+              <a href="/feature/"><span class="kind">特集 ・ 準備中</span><span class="title">{f.title}</span><span class="muted">{f.text}</span></a>
+            ))}
+      </div>
+      <div>
+        <span class="eyebrow">ガイド</span>
+        <div class="guides" style="margin-top: 8px">
+          {guides.length > 0
+            ? guides.map((e) => (
+                <a href={`/guide/${e.id}/`}><span><b>{e.data.title}</b>{e.data.draft && <span class="badge-draft">下書き</span>}<br /><span>{e.data.description}</span></span><i aria-hidden="true">→</i></a>
+              ))
+            : guidePlaceholders.map((g) => (
+                <a href="/guide/"><span><b>{g.title}</b><br /><span>{g.text}</span></span><i aria-hidden="true">→</i></a>
+              ))}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <AdSlot name="top-bottom" />
+</Base>

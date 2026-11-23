@@ -1,0 +1,67 @@
+# CI。push と pull_request（全ブランチ）で、テスト → 合成データでの一連の処理 → ビルドを通す。
+# 実データ（FANZA API）には触れず、secrets も使わない（どのブランチ・どの PR でも安全に動くように）。
+# 手順と運用上の注意は docs/07_運用手順.md を参照。
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# 同じブランチ（PR なら PR ごと）で新しい実行が始まったら、古い実行を取り消す。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # 既定値と同じだが、日次ワークフロー（daily.yml）と揃えて明示する。
+  DB_PATH: data/catalog.sqlite
+  EXPORT_DIR: data/export
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        with:
+          # push しないので git の認証情報は残さない
+          persist-credentials: false
+
+      - name: Node.js を用意
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+
+      - name: 依存を入れる
+        run: npm ci
+
+      - name: テスト
+        run: npm test
+
+      - name: 合成データを取り込む
+        run: npm run ingest -- --synthetic 500
+
+      - name: 派生データを計算する
+        run: npm run derive
+
+      - name: 探索用 JSON を書き出す
+        run: npm run export
+
+      - name: サイトをビルドする
+        # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする
+        run: npm run build
+
+      - name: dist を artifact に保存
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 3
+          if-no-files-found: error
+          # .htaccess や .well-known など、ドットで始まるファイルも含める
+          include-hidden-files: true

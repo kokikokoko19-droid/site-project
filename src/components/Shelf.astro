@@ -1,0 +1,79 @@
+---
+// 棚（横にめくる表紙の並び）。見た目は mocks/v2 の .shelf。トップ・ぶらぶら・軸ページ・新着・似た作品で使う。
+// 棚は表紙が主役で、文字は題名（1〜2 行）だけ。出演者・評価・ラベルは作品ページで見る（docs/08 8 章「店の要素」）。
+// セールのときは tag を付けると、表紙の下に値札（セール価格と、取り消し線の定価）が出る（表紙には重ねない）。
+// title を渡すと、棚の見出し（テーマ名＋件数）を棚の上に出す。説明文は付けない。pop は運営者の一言（小さな琥珀のタグ。1 行）。
+// more を渡すと、棚の末尾に「この棚をもっと見る →」の終端カードを足す（data-shelf-more は計測用）。
+// ほかの終端カードは slot="end" に入れる（.shelf-end の a 要素）。
+// 文言は自動文だけで、公式の紹介文やレビュー本文は使わない。
+import type { CatalogWork } from '../lib/catalog.ts';
+import { toCard } from '../lib/card.ts';
+import { fmtDate } from '../lib/format.ts';
+import WorkCard from './WorkCard.astro';
+
+interface Props {
+  works: CatalogWork[];
+  /** セール中の作品に値札を付ける */
+  tag?: boolean;
+  /** 題名の下の1行。none: 出さない（既定）／who: 出演者／date: 配信開始日 */
+  sub?: 'none' | 'who' | 'date';
+  /** 作品が0件のときに出す文言 */
+  empty?: string;
+  /** 棚の読み上げ名（title があれば title） */
+  label?: string;
+  /** 先頭の何枚を遅延読み込みしないか（画面の最初に見える棚だけ指定する。既定 0） */
+  eager?: number;
+  /** 棚の見出し（テーマ名）。渡したときだけ見出しを出す */
+  title?: string;
+  /** 見出しに添える件数 */
+  count?: number;
+  /** 見出しの右に出すリンク */
+  headLink?: { href: string; label: string };
+  /** 運営者の一言（featured.json の comment）。無ければ出さない */
+  pop?: string | null;
+  /** 「この棚をもっと見る →」の行き先（軸ページなど） */
+  more?: string;
+  /** 見出しの要素（既定 h2） */
+  as?: 'h2' | 'h3';
+  /** 見出しの大きさ（B-5 の大中小。既定は小。トップの「今日の発見」だけ大） */
+  size?: 'l' | 's';
+}
+
+const { works, tag = false, sub = 'none', empty = '該当する作品がありません。', label, eager = 0, title, count, headLink, pop, more, as: H = 'h2', size = 's' } = Astro.props;
+
+const cards = works.map((w) => {
+  const date = fmtDate(w.releasedAt);
+  // WorkCard は sub が空文字なら 1 行目を出さず、undefined なら出演者（無ければメーカー）を出す
+  const line = sub === 'date' ? (date ? `${date} 配信` : '') : sub === 'who' ? undefined : '';
+  return { work: toCard(w), sub: line };
+});
+const name = title ?? label ?? '作品の棚';
+---
+
+{
+  title && (
+    <div class="section-head shelf-head">
+      <H class={`h-${size}`}>{title}{typeof count === 'number' && count > 0 && <span class="n">{count}件</span>}</H>
+      {pop && <span class="pop" title={pop}>{pop}</span>}
+      {headLink && <a href={headLink.href}>{headLink.label}</a>}
+    </div>
+  )
+}
+{
+  cards.length > 0 ? (
+    <div class="shelf-wrap">
+      {/* 横にスクロールできる領域は、キーボードでも動かせるよう tabindex を付ける */}
+      <div class="shelf" role="region" aria-label={name} tabindex="0">
+        {cards.map((c, i) => (
+          <WorkCard work={c.work} variant="shelf" tag={tag} sub={c.sub} eager={i < eager} />
+        ))}
+        {more && <a class="shelf-end" href={more} data-shelf-more><span>この棚をもっと見る →</span></a>}
+        <slot name="end" />
+      </div>
+    </div>
+  ) : (
+    <div class="empty">
+      <p>{empty}</p>
+    </div>
+  )
+}

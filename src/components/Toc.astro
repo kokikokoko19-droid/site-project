@@ -1,0 +1,20 @@
+---
+// 目次。見出しの配列（id と表示名）からページ内リンクを出す。
+interface Props {
+  items: { id: string; label: string }[];
+}
+const { items } = Astro.props;
+---
+
+{
+  items.length > 0 && (
+    <nav class="toc" aria-label="目次">
+      <p class="toc-title">目次</p>
+      <ol>
+        {items.map((it) => (
+          <li><a href={`#${it.id}`}>{it.label}</a></li>
+        ))}
+      </ol>
+    </nav>
+  )
+}

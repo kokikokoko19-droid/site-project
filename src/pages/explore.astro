@@ -1,0 +1,185 @@
+---
+// 探索ページ（/explore/）。並べ替え・目的別チップ・絞り込み・検索・ランダムは、ブラウザ側の JS（public/explorer/）が行う。
+// 画面の順: 目的別チップ → 並びと絞り込みのボタン → 適用中の条件 → 検索欄 → 結果。スマホの絞り込みは下からのシート、PC は左のパネル。
+// ジャンル（件数の上位 12）・ラベル・年の選択肢はビルド時に index.json から埋める。残りのジャンルと出演者・シリーズ・メーカーは
+// ブラウザ側の検索式部品（axis-picker.js）が index.json の names と counts から候補を作る。
+// 作品データ（/data/*.json）は scripts/copy-export.mjs が data/export から public/data にコピーする（npm run build の前に自動実行）。
+// 表示のずれ（CLS）を出さないため、スマホのシートは CSS で最初から閉じておき、結果欄には読み込み中の骨組みを置く。
+import { readFileSync } from 'node:fs';
+import Base from '../layouts/Base.astro';
+import AdSlot from '../components/AdSlot.astro';
+import '../styles/explorer.css';
+
+interface ExportIndex {
+  generatedAt?: string;
+  names?: { genre?: unknown };
+  labels?: unknown;
+  years?: unknown;
+}
+
+/**
+ * 選択肢の元になる index.json を読む。public/data/index.json は prebuild が years を足したもの。
+ * どちらも無い・壊れているときは、ビルドを止めずに空の選択肢で出す（データを入れてから build し直す）。
+ */
+function readIndex(): ExportIndex {
+  for (const path of ['public/data/index.json', 'data/export/index.json']) {
+    try {
+      return JSON.parse(readFileSync(path, 'utf8')) as ExportIndex;
+    } catch {
+      // 次の候補へ
+    }
+  }
+  return {};
+}
+const index = readIndex();
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+const topGenres = strings(index.names?.genre).slice(0, 12); // names は件数の多い順
+const labels = strings(index.labels);
+const years = (Array.isArray(index.years) ? index.years : []).filter((y): y is number => Number.isInteger(y));
+
+// public/explorer/explorer-core.js の SORTS・PRICE_BANDS・LENGTHS・PRESETS と同じ並び・値にする
+const sorts = [['rec', 'おすすめ'], ['rating', '評価が高い順'], ['new', '新しい順'], ['cheap', '安い順'], ['long', '長い順']];
+const priceBands = ['〜500円', '〜1,000円', '〜2,000円', '2,000円超'];
+const lengths = [['s', '〜60分'], ['m', '60〜120分'], ['l', '120分〜'], ['xl', '4時間以上']];
+const presets = [['safe', '外さない1本'], ['fresh', '新作を追う'], ['cheap', '安く試す'], ['long', 'じっくり長編']];
+const SKELETONS = 6;
+---
+
+<Base
+  title="探索"
+  description="おすすめ・評価・新しさ・価格・長さで並べ替え、ジャンルや出演者などで絞り込めます。条件はURLに残るので、そのまま共有できます。"
+  dataUpdatedAt={index.generatedAt}
+>
+  <div class="crumb"><a href="/">トップ</a> › 探索</div>
+  <div class="section-head"><h1>探索</h1><span class="sub">好みの順に並べ替えて、条件で絞り込めます。この URL で同じ結果を共有できます</span></div>
+  <div class="explore">
+    {/* スマホでは下からのシート（CSS で最初から閉じている）、PC では左のパネル */}
+    <aside class="panel" id="panel" aria-label="並べ替えと絞り込み">
+      <div class="sheet-head">
+        <b>絞り込み</b>
+        <button type="button" class="icon-btn" id="sheet-close" aria-label="閉じる">✕</button>
+      </div>
+      <label class="panel-sort field">並び
+        <select class="sort-select" id="f-sort-panel" data-filter="sort">
+          {sorts.map(([v, t]) => <option value={v}>{t}</option>)}
+        </select>
+      </label>
+      <details open>
+        <summary>ジャンル（すべて含む）</summary>
+        <div class="body">
+          <div class="chips" id="genre-chips">
+            {topGenres.map((g) => <button type="button" class="chip" data-g={g} aria-pressed="false">{g}</button>)}
+          </div>
+          <div class="chips" id="genre-extra"></div>
+          <div class="field picker" data-axis="genre" data-label="ジャンル" role="group" aria-label="すべてのジャンル">
+            <span class="pk-title">すべてのジャンル</span>
+          </div>
+        </div>
+      </details>
+      <details>
+        <summary>出演者・シリーズ・メーカー</summary>
+        <div class="body">
+          {[['act', '出演者'], ['ser', 'シリーズ'], ['mak', 'メーカー']].map(([k, t]) => (
+            <div class="field picker" data-axis={k} data-label={t} role="group" aria-label={t}>
+              <span class="pk-title">{t}</span>
+            </div>
+          ))}
+        </div>
+      </details>
+      <details>
+        <summary>価格・長さ・年</summary>
+        <div class="body">
+          <div class="field" role="group" aria-label="価格帯">価格帯（複数選べます）
+            <div class="chips">
+              {priceBands.map((t, i) => <button type="button" class="chip" data-pb={String(i)} aria-pressed="false">{t}</button>)}
+            </div>
+          </div>
+          <div class="field" role="group" aria-label="収録時間">収録時間
+            <div class="chips">
+              {lengths.map(([v, t]) => <button type="button" class="chip" data-len={v} aria-pressed="false">{t}</button>)}
+            </div>
+          </div>
+          <label class="field">配信開始年
+            <select id="f-year"><option value="">指定なし</option>{years.map((y) => <option value={String(y)}>{y}年</option>)}</select>
+          </label>
+        </div>
+      </details>
+      <details>
+        <summary>条件・ラベル</summary>
+        <div class="body">
+          <label class="check"><input type="checkbox" id="f-sale" />セール中のみ</label>
+          <label class="check"><input type="checkbox" id="f-sample" />サンプル動画あり</label>
+          <label class="check"><input type="checkbox" id="f-rev" />評価あり（レビュー5件以上）</label>
+          <div class="chips" id="label-chips">
+            {labels.map((l) => <button type="button" class="chip" data-lab={l} aria-pressed="false">{l}</button>)}
+          </div>
+        </div>
+      </details>
+      <div class="sheet-foot">
+        <button type="button" class="btn btn-cta btn-block" id="sheet-apply"><span class="n-shown">–</span> 件を表示</button>
+      </div>
+    </aside>
+    <div class="sheet-bg" id="sheet-bg" hidden></div>
+
+    <section aria-label="検索結果" class="results-col">
+      <div class="chips purpose" id="purpose" role="group" aria-label="目的から選ぶ">
+        {presets.map(([k, t]) => <button type="button" class="chip" data-preset={k} aria-pressed="false">{t}</button>)}
+      </div>
+      <div class="tools" id="explore-tools">
+        <label class="sort-wrap">並び:
+          <select class="sort-select" id="f-sort" data-filter="sort">
+            {sorts.map(([v, t]) => <option value={v}>{t}</option>)}
+          </select>
+        </label>
+        <button type="button" class="btn btn-filter" id="btn-filter" aria-controls="panel">絞り込み（<span class="n-filter">0</span>）</button>
+      </div>
+      <div class="chips active-chips" id="active-chips" aria-label="適用中の条件"><span class="muted">条件なし（すべての作品）</span></div>
+      <form class="explore-search" id="q-form" role="search" action="/explore/" method="get">
+        <input type="search" name="q" id="f-q" placeholder="題名・出演者・メーカーで検索" aria-label="作品を検索" autocomplete="off" />
+        <button type="submit" class="btn">検索</button>
+      </form>
+      <div class="count-row">
+        <div class="count" aria-live="polite">該当 <b id="count">–</b> 件</div>
+        <button type="button" class="btn btn-small" id="btn-random">ランダムに1本</button>
+      </div>
+      <p class="sort-note muted" id="sort-note">並び順は評価・レビュー数・新しさ・人気順から当サイトが計算しています。広告費による順位付けはありません。</p>
+      <AdSlot name="explore-top" />
+      <div id="results" class="grid" aria-busy="true">
+        {Array.from({ length: SKELETONS }, () => (
+          <div class="sk-card" aria-hidden="true"><div class="thumb"></div><div class="sk-line"></div><div class="sk-line short"></div></div>
+        ))}
+      </div>
+      <noscript><p class="muted">探索はJavaScriptで動きます。有効にしてから開き直してください。</p></noscript>
+      <div id="empty" class="empty" hidden>
+        <div><b>条件に合う作品がありません。</b></div>
+        <div class="muted">条件を1つ外すと見つかるかもしれません。</div>
+        <div class="row" id="empty-actions"></div>
+      </div>
+      <div class="loading" id="more">読み込み中…</div>
+    </section>
+  </div>
+
+  {/* スマホの下端の固定バー（並べ替えは端末の選択画面、絞り込みはシート） */}
+  <div class="bottom-bar" id="bottom-bar">
+    <label class="bar-sort"><span>並べ替え</span>
+      <select class="sort-select" id="f-sort-bar" data-filter="sort" aria-label="並べ替え">
+        {sorts.map(([v, t]) => <option value={v}>{t}</option>)}
+      </select>
+    </label>
+    <button type="button" class="btn" id="bar-filter" aria-controls="panel">絞り込み（<span class="n-filter">0</span>）</button>
+  </div>
+
+  {/* 作品の詳細モーダル。中身は explorer-ui.js が作品ごとに入れる。開くと URL に #w=ID が付き、ブラウザの「戻る」で閉じる */}
+  <div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modal-title"></h2>
+        <button type="button" class="icon-btn" id="modal-close" aria-label="閉じる">✕</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  {/* public/ のファイルなので is:inline（Astro に処理させない）。explorer-ui.js が core と view を import する */}
+  <script is:inline type="module" src="/explorer/explorer-ui.js"></script>
+</Base>

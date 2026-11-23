@@ -1,0 +1,25 @@
+/* デザイントークン v2「夜の名鑑」。暗い漆と紙の色、琥珀の強調、朱の印。
+   見出しは明朝（Shippori Mincho B1）、本文はゴシック。設計方針 6 章の v2 として提案するもの */
+:root {
+  --bg0: #141110;            /* ページ背景（赤みのある黒） */
+  --bg1: #1c1816;            /* パネル */
+  --bg2: #262019;            /* 入力欄・ホバー */
+  --fg0: #efe7da;            /* 見出し・本文（紙の色） */
+  --fg1: #bdae9a;            /* 補足 */
+  --fg2: #85775f;            /* 弱い補足 */
+  --accent: #d9a441;         /* 強調（琥珀） */
+  --accent-ink: #1a1407;     /* 強調ボタンの文字 */
+  --accent-soft: rgba(217, 164, 65, .14);
+  --seal: #c9392b;           /* 朱（印とセール札） */
+  --seal-ink: #fff3ee;
+  --line: #342b25;           /* 境界線 */
+  --line-strong: #4a3d33;    /* 強い境界線 */
+  --radius: 4px;
+  --sp: 8px;
+  --fs-b: 15px;
+  --fs-s: 12.5px;
+  --font-display: "Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+  --font: -apple-system, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  --maxw: 1200px;
+  color-scheme: dark;
+}

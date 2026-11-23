@@ -1,0 +1,261 @@
+# 日次の更新（設計方針 8.1）。
+# 毎日 日本時間 06:00 に、取り込み → 派生計算 → 書き出し → ビルドを行い、dist/ を artifact に残す。
+# 配信（mixhost への rsync/SSH）は deploy ジョブ。実データの実行で、配信用の secrets が揃っているときだけ転送する。
+# 手順と運用上の注意（cache の扱い、secrets の登録、失敗時の見方）は docs/07_運用手順.md を参照。
+name: Daily
+
+on:
+  schedule:
+    # 日本時間 06:00 = UTC 21:00（前日）。GitHub 側の混雑で数分から十数分遅れることがある。
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+    inputs:
+      recent_days:
+        description: '直近の取り込み日数（通常は 7。失敗が続いた後や cache を失った後の取り直しで増やす）'
+        type: string
+        required: false
+        default: '7'
+      ranked_pages:
+        description: '人気順の取り込みページ数（通常は 5。取り直しで増やす）'
+        type: string
+        required: false
+        default: '5'
+      actress_profiles:
+        description: '出演者プロフィールも取り込む（通常は on。cache を失った後の取り直しなど、時間を節約したいときだけ off）'
+        type: boolean
+        required: false
+        default: true
+
+# 日次は同時に 2 つ動かさない。実行中のものは止めず、後から来たものを待たせる。
+concurrency:
+  group: daily
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  DB_PATH: data/catalog.sqlite
+  EXPORT_DIR: data/export
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    # 36 か月分の取り直し（約 60 分）が収まる上限。通常の日次は 30〜40 分
+    timeout-minutes: 150
+    outputs:
+      # 実データ（FANZA API）で作ったときだけ 'true'。配信を有効にするときの条件に使う。
+      real_data: ${{ steps.creds.outputs.have_api }}
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+        with:
+          # push しないので git の認証情報は残さない
+          persist-credentials: false
+
+      - name: Node.js を用意
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22'
+          cache: npm
+
+      - name: 依存を入れる
+        run: npm ci
+
+      # secrets は step の if 条件で直接は使えないので、有無の判定だけをこのステップで行い、結果を出力に残す。
+      # secrets はこのステップと「実データを取り込む」ステップにだけ渡す（npm ci などには渡さない）。
+      - name: API 認証情報の有無を確認
+        id: creds
+        env:
+          FANZA_API_ID: ${{ secrets.FANZA_API_ID }}
+          FANZA_AFFILIATE_ID: ${{ secrets.FANZA_AFFILIATE_ID }}
+        run: |
+          if [ -n "$FANZA_API_ID" ] && [ -n "$FANZA_AFFILIATE_ID" ]; then
+            echo "have_api=true" >> "$GITHUB_OUTPUT"
+            echo "データの取得元: 実データ（FANZA API）" >> "$GITHUB_STEP_SUMMARY"
+            echo "FANZA_API_ID と FANZA_AFFILIATE_ID が両方あります。実データを取り込みます。"
+          else
+            echo "have_api=false" >> "$GITHUB_OUTPUT"
+            echo "データの取得元: 合成データ（認証情報がないための代替。配信には使わない）" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=合成データで代替::FANZA_API_ID と FANZA_AFFILIATE_ID の両方が設定されていないため、API を使わず合成データで代替します。この実行の dist は配信に使わないこと。"
+          fi
+
+      # DB の cache は実データのときだけ使う（合成データを実データの DB に混ぜない）。
+      # cache は同じキーで上書きできないので、キーは実行ごとに変える（保存側も同じ形）。
+      # 復元は restore-keys の前方一致で、いちばん新しいものが選ばれる。
+      # 7 日アクセスがないと GitHub が cache を消すため、空の DB から始まっても動く作りにしてある。
+      - name: DB を cache から復元（実データのときだけ）
+        id: restore
+        if: steps.creds.outputs.have_api == 'true'
+        uses: actions/cache/restore@v4
+        with:
+          path: data/catalog.sqlite
+          key: catalog-db-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            catalog-db-v1-
+
+      - name: 実データを取り込む
+        if: steps.creds.outputs.have_api == 'true'
+        env:
+          FANZA_API_ID: ${{ secrets.FANZA_API_ID }}
+          FANZA_AFFILIATE_ID: ${{ secrets.FANZA_AFFILIATE_ID }}
+          RESTORED_KEY: ${{ steps.restore.outputs.cache-matched-key }}
+          # 手動実行のときだけ入力で変えられる。定期実行は 7 と 5。
+          RECENT_DAYS: ${{ inputs.recent_days || '7' }}
+          RANKED_PAGES: ${{ inputs.ranked_pages || '5' }}
+          # 手動実行で off にしたときだけ 'false'。定期実行は空文字で on
+          ACTRESS_PROFILES: ${{ inputs.actress_profiles }}
+        run: |
+          if [ -n "$RESTORED_KEY" ]; then
+            echo "復元した DB の cache: $RESTORED_KEY"
+          else
+            echo "::warning title=cache なし::復元できる DB の cache がないため、空の DB から始めます。取り込まれるのは直近 ${RECENT_DAYS} 日分と人気順の上位 ${RANKED_PAGES} ページ分だけです。必要なら手動実行で範囲を広げてください（docs/07_運用手順.md の 3.5 節）。"
+          fi
+          # --actress-profiles: works の出演者のうちプロフィール未取得の人だけを取り込む（1回 1500 人まで。残りは翌日に続く）
+          # --refresh-limit: 再取得は 1 日 1,500 件まで（取得日時の古い順に巡回。実行時間を抑えるため）
+          profiles="--actress-profiles"
+          if [ "$ACTRESS_PROFILES" = "false" ]; then
+            profiles=""
+            echo "出演者プロフィールの取り込みは今回は飛ばします（入力 actress_profiles=false）" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          # shellcheck disable=SC2086
+          npm run ingest -- --recent-days "$RECENT_DAYS" --refresh --refresh-limit 1500 --ranked-pages "$RANKED_PAGES" $profiles
+
+      - name: 合成データで代替する（認証情報なし）
+        if: steps.creds.outputs.have_api != 'true'
+        run: |
+          echo "認証情報がないため、API を使わず合成データ 3000 件で代替します（cache は使いません）。"
+          npm run ingest -- --synthetic 3000
+
+      - name: 派生データを計算する
+        run: npm run derive
+
+      - name: 探索用 JSON を書き出す
+        run: npm run export
+
+      - name: 公開の切替を要約に出す
+        # Variables が未設定のときは仮公開の状態（noindex=1、affiliate=off）で作る。本公開のときに PUBLIC_NOINDEX=off、AFFILIATE_LINKS=on を設定する
+        # 切替は Settings > Secrets and variables > Actions の Variables で行う（docs/07_運用手順.md の 3.3 節）。値そのものは出さず、on/off と有無だけ出す
+        env:
+          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX || '1' }}
+          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS || 'off' }}
+          PUBLIC_GA4_ID: ${{ vars.PUBLIC_GA4_ID }}
+        run: |
+          noindex=off; [ "$PUBLIC_NOINDEX" = "1" ] && noindex=on
+          affiliate=off; [ "$AFFILIATE_LINKS" = "on" ] && affiliate=on
+          ga4=無; [ -n "$PUBLIC_GA4_ID" ] && ga4=有
+          echo "公開の切替: noindex=$noindex、affiliate=$affiliate、GA4=$ga4" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: サイトをビルドする
+        # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする。
+        # postbuild の check-dist は AFFILIATE_LINKS を見て、/go/ の移動先と dist 全体の affi_id を検査する
+        env:
+          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX || '1' }}
+          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS || 'off' }}
+          PUBLIC_GA4_ID: ${{ vars.PUBLIC_GA4_ID }}
+          FANZA_SITE_AFFILIATE_ID: ${{ secrets.FANZA_SITE_AFFILIATE_ID }}
+        run: npm run build
+
+      # 取り込みから build までが全部成功したときだけ保存する（失敗した実行の DB は残さない）。
+      - name: DB を cache に保存（実データのときだけ）
+        if: steps.creds.outputs.have_api == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: data/catalog.sqlite
+          key: catalog-db-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: dist を artifact に保存
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+          # .htaccess や .well-known など、ドットで始まるファイルも含める
+          include-hidden-files: true
+
+  # 配信。dist/ を rsync over SSH でホストへ同期する（scripts/deploy.sh）。
+  # 動くのは「実データの実行」かつ「接続用の secrets が 4 つ揃っている」ときだけ。
+  # 合成データの dist は本番へ出さない。secrets が欠けているときは何も転送せず、ジョブは成功で終わる。
+  # secrets は if に直接書けないので、判定ステップで has_deploy を出力し、後続ステップで使う。
+  # 設定の手順は docs/07_運用手順.md の 5 章を参照。
+  deploy:
+    needs: update
+    if: ${{ needs.update.outputs.real_data == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: 配信用 secrets の有無を確認
+        id: gate
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          if [ -n "$DEPLOY_HOST" ] && [ -n "$DEPLOY_USER" ] && [ -n "$DEPLOY_PATH" ] && [ -n "$DEPLOY_SSH_KEY" ]; then
+            echo "has_deploy=true" >> "$GITHUB_OUTPUT"
+            echo "配信: 実施する" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "has_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "配信: 見送り（DEPLOY_HOST・DEPLOY_USER・DEPLOY_PATH・DEPLOY_SSH_KEY のいずれかが未登録）" >> "$GITHUB_STEP_SUMMARY"
+            echo "::notice title=配信を見送り::配信用の secrets が揃っていないため、転送しません。"
+          fi
+
+      - name: チェックアウト（scripts/deploy.sh のため）
+        if: steps.gate.outputs.has_deploy == 'true'
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: dist をダウンロード
+        if: steps.gate.outputs.has_deploy == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: SSH 鍵と known_hosts を用意
+        if: steps.gate.outputs.has_deploy == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          # 秘密鍵は「-----BEGIN で始まる本文」でも「その base64（1行）」でもよい。CR は取り除く
+          key=$(printf '%s' "$DEPLOY_SSH_KEY" | tr -d '\r')
+          case "$key" in
+            *"-----BEGIN"*) printf '%s\n' "$key" > ~/.ssh/deploy_key ;;
+            *) printf '%s' "$key" | tr -d ' \n' | base64 -d > ~/.ssh/deploy_key 2>/dev/null || { echo "::error title=鍵の形式::DEPLOY_SSH_KEY が秘密鍵（-----BEGIN OPENSSH PRIVATE KEY-----）でも、その base64 でもありません（docs/07 5.3 節）。"; exit 1; } ;;
+          esac
+          chmod 600 ~/.ssh/deploy_key
+          # 読める鍵かを先に確かめ、指紋を出す（cPanel に登録した公開鍵と同じ鍵かの確認に使う）
+          if ! ssh-keygen -l -f ~/.ssh/deploy_key > /tmp/deploy_key_fp.txt 2>&1; then
+            echo "::error title=鍵を読めない::DEPLOY_SSH_KEY の中身が壊れています（$(head -1 /tmp/deploy_key_fp.txt)）。base64 -i ~/Desktop/avmeguri_deploy | pbcopy で貼り直してください（docs/07 5.3 節）。"
+            exit 1
+          fi
+          echo "配信用の鍵の指紋: $(cut -d' ' -f1,2 /tmp/deploy_key_fp.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
+          # ホストの公開鍵を取得して登録する（初回の接続で確認を求められないようにする）
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: ホストへ配信
+        if: steps.gate.outputs.has_deploy == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_CHECK_URL: ${{ secrets.DEPLOY_CHECK_URL }}
+        run: |
+          export DEPLOY_KEY_FILE="$HOME/.ssh/deploy_key"
+          scripts/deploy.sh
+
+      # 成功・失敗にかかわらず、鍵はジョブの終わりに消す。
+      - name: SSH 鍵を削除
+        if: always() && steps.gate.outputs.has_deploy == 'true'
+        run: rm -f ~/.ssh/deploy_key

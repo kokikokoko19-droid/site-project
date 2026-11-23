@@ -1,0 +1,74 @@
+---
+// 出演者ランキング（/ranking/actress/）。ベイズ平均の高い順に上位50人。順位は機械的に決める。
+// 1 人 1 行のカード（表はやめた。第三者レビュー A I4、B-13）
+import '../../styles/actress.css';
+import Base from '../../layouts/Base.astro';
+import AdSlot from '../../components/AdSlot.astro';
+import Breadcrumb from '../../components/Breadcrumb.astro';
+import { loadCatalog } from '../../lib/catalog.ts';
+import { actressStats, rankActresses, globalMeanAvg, workBayes } from '../../lib/actress-stats.ts';
+
+const catalog = loadCatalog();
+const meanAvg = globalMeanAvg(catalog);
+const ranked = rankActresses(actressStats(catalog)).slice(0, 50);
+
+// 代表作: その出演者の作品のうちベイズ平均が最も高い1件
+const rows = ranked.map((s) => {
+  const works = catalog.byActress.get(s.id) ?? [];
+  const best = works.slice().sort((a, b) => workBayes(b, meanAvg) - workBayes(a, meanAvg))[0] ?? null;
+  return { s, best };
+});
+---
+
+<Base
+  title="出演者ランキング｜評価と作品数で見る"
+  description="レビューの平均と件数、作品数から機械的に順位を付けた出演者ランキングです。"
+  dataUpdatedAt={catalog.meta.lastIngestAt ?? undefined}
+>
+  <Breadcrumb items={[{ href: '/', label: 'トップ' }, { href: '/ranking/', label: 'ランキング' }, { label: '出演者ランキング' }]} />
+  <section class="section-s" style="margin-top: 8px">
+    <h1>出演者ランキング</h1>
+    <div class="editorial">
+      <!-- TODO: 運営者が記入 -->
+      <p class="muted">運営者による導入文をここに入れます。</p>
+    </div>
+    <p class="muted">作品3件以上の出演者を、レビュー平均を件数で補正した値（ベイズ平均）の高い順に並べています。</p>
+  </section>
+
+  <section class="section-s">
+    {
+      rows.length === 0 ? (
+        <div class="empty"><p>ランキングの対象になる出演者がまだいません。</p></div>
+      ) : (
+        /* 1 人 1 行（順位・名前・代表作の表紙・作品数と★平均）。顔写真は使わず、代表作の表紙で代える（B-13） */
+        <ol class="ar-list">
+          {rows.map(({ s, best }, i) => {
+            const cover = best ? best.imageLarge || best.imageList || best.imageSmall : null;
+            return (
+              <li class="ar-row">
+                <span class="rank-no" role="img" aria-label={`${i + 1}位`}>{i + 1}</span>
+                {best ? (
+                  <a class="ar-cover" href={`/v/${best.contentId}/`} tabindex="-1" aria-hidden="true">
+                    {cover && <img src={cover} alt="" width="800" height="538" loading={i < 4 ? 'eager' : 'lazy'} decoding="async" />}
+                  </a>
+                ) : (
+                  <span class="ar-cover" aria-hidden="true"></span>
+                )}
+                <div class="ar-body">
+                  <a class="ar-name" href={`/actress/${s.id}/`}>{s.name}</a>
+                  <div class="ar-stat">
+                    <span>作品 <b>{s.works}</b>件</span>
+                    {s.reviewAvg !== null && <span class="rate">★ {s.reviewAvg.toFixed(2)} <span class="dim">（{s.reviewTotal}件）</span></span>}
+                  </div>
+                  {best && <a class="ar-best" href={`/v/${best.contentId}/`}><span class="dim">代表作</span> {best.title}</a>}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )
+    }
+  </section>
+
+  <AdSlot name="ranking-actress-bottom" />
+</Base>

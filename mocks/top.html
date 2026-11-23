@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>カタログ（モック）</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="common.css">
+</head>
+<body>
+<main class="wrap" id="main"></main>
+<script src="data.js"></script>
+<script src="ui.js"></script>
+<script>
+(function () {
+  const M = window.MOCK, UI = window.UI;
+  UI.shell('top');
+  const byDate = [...M.works].sort((a, b) => b.releasedAt - a.releasedAt);
+  const pickN = (arr, n) => { const a = [...arr]; const out = []; while (out.length < n && a.length) out.push(a.splice(Math.floor(Math.random() * a.length), 1)[0]); return out; };
+  const today = pickN(M.works.filter(w => w.labels.includes('高評価') || w.labels.includes('定番')), 3);
+  const sale = M.works.filter(w => w.onSale).sort((a, b) => a.rank - b.rank).slice(0, 5);
+  const section = (title, sub, link, items) => `<section class="section"><div class="section-head"><h2>${title}<span class="muted" style="margin-left:8px">${sub}</span></h2>${link ? `<a href="${link}">もっと見る</a>` : ''}</div><div class="grid">${items.map(UI.card).join('')}</div></section>`;
+  document.getElementById('main').innerHTML = `
+    <section class="section">
+      <div class="editorial"><div class="who">運営者から</div>
+        <p>（ここは運営者が書く場所です。今週見たもの、気づいたこと、サイトの使い方を数行で。自動生成ではなく人の声が最初に目に入るようにします。）</p>
+      </div>
+    </section>
+    ${section('今日の発見', '評価と定番から毎日入れ替え', 'explorer.html', today)}
+    <section class="section"><div class="section-head"><h2>軸から探す</h2></div>
+      <div class="entry">
+        <a href="explorer.html"><b>出演者</b><span>${M.ACTRESSES.length}人</span></a>
+        <a href="explorer.html"><b>シリーズ</b><span>${M.SERIES.length}件</span></a>
+        <a href="explorer.html"><b>メーカー</b><span>${M.MAKERS.length}社</span></a>
+        <a href="explorer.html"><b>ジャンル</b><span>${M.GENRES.length}種</span></a>
+      </div>
+    </section>
+    <section class="section"><div class="section-head"><h2>特集とガイド</h2><span class="muted">運営者が選び、運営者が書く</span></div>
+      <div class="hub">
+        <a href="#"><span class="kind">特集</span><span class="title">（特集タイトル 1）</span><span class="muted">運営者が選んだ作品群と、その理由を書く場所です。</span></a>
+        <a href="#"><span class="kind">特集</span><span class="title">（特集タイトル 2）</span><span class="muted">季節やセールに合わせて入れ替えます。</span></a>
+      </div>
+      <div style="height:16px"></div>
+      <div class="hub three">
+        <a href="#"><span class="kind">ガイド</span><span class="title">このサイトの使い方</span><span class="muted">探索ページの重みと絞り込みの考え方。</span></a>
+        <a href="#"><span class="kind">ガイド</span><span class="title">はじめての1本の選び方</span><span class="muted">「初見向け」ラベルの意味と選び方。</span></a>
+        <a href="#"><span class="kind">ガイド</span><span class="title">軸の解説</span><span class="muted">シリーズ追い、出演者追い、メーカーの作風。</span></a>
+      </div>
+    </section>
+    ${section('新着', '直近の配信開始', 'explorer.html?sort=new', byDate.slice(0, 5))}
+    ${section('セール中', '期間限定', 'explorer.html?sale=1', sale)}
+    <div class="ad-slot">広告スロット（空）</div>`;
+})();
+</script>
+</body>
+</html>

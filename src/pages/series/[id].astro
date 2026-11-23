@@ -1,0 +1,18 @@
+---
+// シリーズページ（/series/{id}/）。索引（catalog.bySeries）のキーごとに1ページ作る。中身は軸ページ共通の AxisPage。
+import AxisPage from '../../components/AxisPage.astro';
+import { loadCatalog } from '../../lib/catalog.ts';
+
+export function getStaticPaths() {
+  const catalog = loadCatalog();
+  return [...catalog.bySeries].map(([id, works]) => ({
+    params: { id },
+    props: { name: catalog.refNames.series.get(id) ?? id, works },
+  }));
+}
+
+const { id } = Astro.params as { id: string };
+const { name, works } = Astro.props;
+---
+
+<AxisPage kind="series" id={id} name={name} works={works} />
