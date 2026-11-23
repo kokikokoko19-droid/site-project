@@ -3,6 +3,7 @@
 // 並びは「題名 → 主画像 →（サンプル動画）→ 価格と FANZA ボタン（PR）→ サンプル画像 → 自動文 → 仕様表 → 似た作品 → 末尾の CTA」
 // （第三者レビュー A C1・B-3・D-8、運営者レビュー WP7）。動画は主画像の直下（スマホ）。動画が無い作品ではその枠を出さない。
 // PC は左列に横長のジャケットとサンプル動画、右列に題名・価格と CTA・自動文・仕様表を置き、サンプル画像は両列の下に通しで置く。
+// サンプル画像は公式の大きい版を縦に並べ、3 枚目の後と末尾に CTA（gallery-mid / gallery-end）を置く（SampleGallery.astro）。
 // スマホは、メインの CTA が画面外にある間だけ画面下に細い帯（価格と「FANZAで見る PR」）を出す（JS 無しでは出ない）。
 // 紹介文は公式の文章を使わず、データ駆動の自動文（pageText）だけを出す。欠けた項目は行ごと省き、「不明」などは出さない。
 import Base from '../../layouts/Base.astro';
@@ -96,8 +97,12 @@ const upcoming = releaseDay !== null && /^\d{4}-\d{2}-\d{2}$/.test(releaseDay) &
 
 // /go/{id}/ は outboundUrl がある作品にしか作られない（go/[id].astro と同じ条件）。無い作品にはボタンを出さない
 const hasLink = typeof work.outboundUrl === 'string' && work.outboundUrl.length > 0;
+// サンプル画像の末尾に CTA が出るか（SampleGallery の END_MIN と同じ条件: 有効な URL が3枚以上）
+const galleryEnd = hasLink && work.sampleImages.filter((u) => typeof u === 'string' && u.trim() !== '').length >= 3;
 
 const similar = catalog.similar(work, 8);
+// 末尾の CTA（work-bottom）。PC ではサンプル画像の直後に来るので、似た作品の棚が無く、画像の末尾に CTA がある作品では出さない（同じ画面に2つ並ぶのを避ける。画像の末尾を優先）
+const showBottom = hasLink && !(galleryEnd && similar.length === 0);
 // 似た作品の棚の終端。出演者がいれば出演者ページ、いつも探索（ジャンルの上位2つ。無ければ出演者・メーカー）
 const exploreQuery = new URLSearchParams();
 for (const g of names(work.genres).slice(0, 2)) exploreQuery.append('g', g);
@@ -191,8 +196,13 @@ const STICKY_SCRIPT = `(function () {
         {
           work.sampleImages.length > 0 && (
             <section class="work-gallery">
-              <div class="section-head"><h2>サンプル画像</h2><span class="sub">タップで拡大</span></div>
-              <SampleGallery images={work.sampleImages} />
+              <div class="section-head"><h2>サンプル画像</h2></div>
+              {/* 画像の途中と末尾の CTA（作品ページの上の CTA と同じ部品・同じ文言）。出す条件は SampleGallery 側で決める。
+                  CtaButton の pos の型は top/sticky/bottom だけだが、data-cta-pos にそのまま出るだけなので gallery-mid / gallery-end を渡す */}
+              <SampleGallery images={work.sampleImages}>
+                {hasLink && <div slot="mid" class="cta-box work-gallery-cta" data-cta-watch><CtaButton id={work.contentId} pos={'gallery-mid' as 'top'} /></div>}
+                {hasLink && <div slot="end" class="cta-box work-gallery-cta" data-cta-watch><CtaButton id={work.contentId} pos={'gallery-end' as 'top'} /></div>}
+              </SampleGallery>
             </section>
           )
         }
@@ -257,8 +267,8 @@ const STICKY_SCRIPT = `(function () {
       }
 
       {
-        hasLink && (
-          <div class="cta-box work-bottom" data-cta-watch>
+        showBottom && (
+          <div class:list={['cta-box', 'work-bottom', { 'after-gallery-cta': galleryEnd }]} data-cta-watch>
             <div class="work-price">
               {price && (
                 <span class="price">
@@ -330,11 +340,10 @@ const STICKY_SCRIPT = `(function () {
     }
     .work-movie { align-self: start; }
   }
-  .work-page .gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  @media (min-width: 640px) { .work-page .gallery { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
-  /* 1 倍の画面では小さい版（幅 120px）が選ばれるので、枠を 120px までにして引き伸ばさない（第三者レビュー B-1）。2 倍以上の画面は srcset で大きい版になる */
-  @media (min-width: 640px) and (max-resolution: 1.5dppx) { .work-page .gallery { grid-template-columns: repeat(auto-fill, minmax(100px, 120px)); } }
   .work-bottom { max-width: 520px; }
+  /* PC では似た作品の棚が 1 段（高さ 400px ほど）なので、画像の末尾の CTA と末尾の CTA が同じ画面に入る。画像の末尾を優先して末尾の CTA は出さない。
+     スマホは自動文と仕様表が間に入って 1 画面より離れるので出す */
+  @media (min-width: 960px) { .work-bottom.after-gallery-cta { display: none; } }
   /* 棚の終端カード */
   .shelf-end { display: flex; flex-direction: column; justify-content: center; gap: 6px; aspect-ratio: 3 / 4; padding: var(--sp); border: 1px dashed var(--line-strong); border-radius: 3px; color: var(--accent); font-size: 13px; line-height: 1.5; text-align: center; align-items: center; }
   .shelf-end:hover { border-color: var(--accent); background: var(--accent-soft); }
