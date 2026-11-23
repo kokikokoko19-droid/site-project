@@ -8,6 +8,10 @@ draft: true
 # 載せる作品の content_id（書いた順に、本文の下へ自動で並ぶ）。カタログに無いIDは表示されず、ビルド時に警告が出る。
 # 数字だけのIDは "" で囲んで文字列にする。例: works: ["content_id_1", "content_id_2"]
 works: []
+# 一言を添えるときは works の代わりに items を使う（items があれば works より優先。書いた順に 1 位から並ぶ。note は省略可）。例:
+# items:
+#   - { id: "content_id_1", note: "運営者の一言" }
+#   - { id: "content_id_2" }
 # TODO: 運営者が記入（特集の導入文。見出しの下に出る。2〜3行）
 intro: "（特集の導入文。運営者が記入）"
 ---

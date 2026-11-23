@@ -232,3 +232,13 @@ describe('format', () => {
     assert.equal(minutes(120), '120分'); assert.equal(minutes(null), ''); assert.equal(minutes(0), '');
   });
 });
+
+describe('summaryText の price: false', () => {
+  it('価格の句が入らない（セール中でも）', () => {
+    const w = mk({ priceMin: 1980, listPrice: 2980, derivedLabels: ['セール中'] });
+    for (const v of range(VARIANT_COUNT.summary)) assert.ok(!renderSummary(w, v, { price: false }).includes('円'), `summary#${v} に価格`);
+    assert.ok(!summaryText(w, { price: false }).includes('円'));
+    // 既定は従来どおり価格が入る変種がある
+    assert.ok(range(VARIANT_COUNT.summary).some((v) => renderSummary(w, v).includes('円')));
+  });
+});
