@@ -20,6 +20,11 @@ on:
         type: string
         required: false
         default: '5'
+      actress_profiles:
+        description: '出演者プロフィールも取り込む（通常は on。cache を失った後の取り直しなど、時間を節約したいときだけ off）'
+        type: boolean
+        required: false
+        default: true
 
 # 日次は同時に 2 つ動かさない。実行中のものは止めず、後から来たものを待たせる。
 concurrency:
@@ -36,7 +41,8 @@ env:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 36 か月分の取り直し（約 60 分）が収まる上限。通常の日次は 30〜40 分
+    timeout-minutes: 150
     outputs:
       # 実データ（FANZA API）で作ったときだけ 'true'。配信を有効にするときの条件に使う。
       real_data: ${{ steps.creds.outputs.have_api }}
@@ -97,6 +103,8 @@ jobs:
           # 手動実行のときだけ入力で変えられる。定期実行は 7 と 5。
           RECENT_DAYS: ${{ inputs.recent_days || '7' }}
           RANKED_PAGES: ${{ inputs.ranked_pages || '5' }}
+          # 手動実行で off にしたときだけ 'false'。定期実行は空文字で on
+          ACTRESS_PROFILES: ${{ inputs.actress_profiles }}
         run: |
           if [ -n "$RESTORED_KEY" ]; then
             echo "復元した DB の cache: $RESTORED_KEY"
@@ -104,8 +112,14 @@ jobs:
             echo "::warning title=cache なし::復元できる DB の cache がないため、空の DB から始めます。取り込まれるのは直近 ${RECENT_DAYS} 日分と人気順の上位 ${RANKED_PAGES} ページ分だけです。必要なら手動実行で範囲を広げてください（docs/07_運用手順.md の 3.5 節）。"
           fi
           # --actress-profiles: works の出演者のうちプロフィール未取得の人だけを取り込む（1回 1500 人まで。残りは翌日に続く）
-          # --refresh-limit: 再取得は 1 日 1,500 件まで（取得日時の古い順に巡回。60 分の上限に収めるため）
-          npm run ingest -- --recent-days "$RECENT_DAYS" --refresh --refresh-limit 1500 --ranked-pages "$RANKED_PAGES" --actress-profiles
+          # --refresh-limit: 再取得は 1 日 1,500 件まで（取得日時の古い順に巡回。実行時間を抑えるため）
+          profiles="--actress-profiles"
+          if [ "$ACTRESS_PROFILES" = "false" ]; then
+            profiles=""
+            echo "出演者プロフィールの取り込みは今回は飛ばします（入力 actress_profiles=false）" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          # shellcheck disable=SC2086
+          npm run ingest -- --recent-days "$RECENT_DAYS" --refresh --refresh-limit 1500 --ranked-pages "$RANKED_PAGES" $profiles
 
       - name: 合成データで代替する（認証情報なし）
         if: steps.creds.outputs.have_api != 'true'
@@ -120,10 +134,11 @@ jobs:
         run: npm run export
 
       - name: 公開の切替を要約に出す
+        # Variables が未設定のときは仮公開の状態（noindex=1、affiliate=off）で作る。本公開のときに PUBLIC_NOINDEX=off、AFFILIATE_LINKS=on を設定する
         # 切替は Settings > Secrets and variables > Actions の Variables で行う（docs/07_運用手順.md の 3.3 節）。値そのものは出さず、on/off と有無だけ出す
         env:
-          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX }}
-          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS }}
+          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX || '1' }}
+          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS || 'off' }}
           PUBLIC_GA4_ID: ${{ vars.PUBLIC_GA4_ID }}
         run: |
           noindex=off; [ "$PUBLIC_NOINDEX" = "1" ] && noindex=on
@@ -135,8 +150,8 @@ jobs:
         # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする。
         # postbuild の check-dist は AFFILIATE_LINKS を見て、/go/ の移動先と dist 全体の affi_id を検査する
         env:
-          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX }}
-          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS }}
+          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX || '1' }}
+          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS || 'off' }}
           PUBLIC_GA4_ID: ${{ vars.PUBLIC_GA4_ID }}
           FANZA_SITE_AFFILIATE_ID: ${{ secrets.FANZA_SITE_AFFILIATE_ID }}
         run: npm run build
