@@ -7,7 +7,8 @@
  * 環境変数: X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET（--dry-run 以外で必須）、SITE_URL（--with-url で必須）、
  *   DB_PATH（既定 data/catalog.sqlite）, EXPORT_DIR（既定 data/export）, X_DAILY_MAX（既定 3。0 で投稿を止める）
  *   .env を使うときは node に --env-file=.env を付ける。
- * 終了コード: 0 成功（上限に達して投稿しなかった場合を含む）、1 実行中のエラー、2 使い方・設定の誤り（認証情報の不足を含む）。
+ * カタログの生成時刻（generatedAt）が 24 時間より古い、または無いときは投稿を見送る（--dry-run でも同じ。理由を出力する）。
+ * 終了コード: 0 成功（上限に達した・カタログが古いために投稿しなかった場合を含む）、1 実行中のエラー、2 使い方・設定の誤り（認証情報の不足を含む）。
  * 認証情報の値は出力しない。投稿は2件目以降、前の投稿から 60 秒以上あける。
  */
 import { pathToFileURL } from 'node:url';
@@ -16,7 +17,7 @@ import { loadCatalog } from '../lib/catalog.ts';
 import type { Catalog } from '../lib/catalog.ts';
 import { createXClient, redactSecrets } from './client.ts';
 import { composePost, normalizeSiteUrl } from './compose.ts';
-import { selectWorks } from './select.ts';
+import { selectWorks, staleCatalogReason } from './select.ts';
 import { POST_KINDS, jstDateKey, openPostStore } from './store.ts';
 import type { PostKind } from './store.ts';
 
@@ -83,6 +84,12 @@ async function runPost(o: Options, env: Env, deps: CliDeps, out: (line: string) 
   const now = deps.now ?? (() => new Date());
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const catalog = deps.catalog ?? loadCatalog({ exportDir: env.EXPORT_DIR || undefined });
+  // 安全弁: 古いカタログ（日次更新が止まっている）では投稿しない。価格やセールの状態が実際と食い違うのを避ける
+  const stale = staleCatalogReason(catalog.meta.generatedAt, now());
+  if (stale) {
+    out(`${o.dryRun ? '[dry-run] ' : ''}投稿を見送ります: ${stale}`);
+    return 0;
+  }
   const store = openPostStore(env.DB_PATH || 'data/catalog.sqlite');
   try {
     const today = jstDateKey(now());

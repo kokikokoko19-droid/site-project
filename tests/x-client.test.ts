@@ -144,12 +144,13 @@ describe('CLI（post）', () => {
     contentId: id, title: `作品 ${id}`, volumeMin: 100, reviewCount: 5, reviewAvg: 4, releasedAt: '2026-10-01', priceMin: 1, listPrice: 1, status: 'active',
     derivedLabels: [label], genres: [], actresses: [], series: [], makers: [], deliveries: [], campaigns: [], labels: [], directors: [], sampleImages: [], similarIds: [],
   }) as unknown as CatalogWork;
-  const catalog = buildCatalog(['新作', 'セール中', '高評価', '初見向け'].map((l, i) => work(`W${i}`, l)));
+  const works = ['新作', 'セール中', '高評価', '初見向け'].map((l, i) => work(`W${i}`, l));
+  const catalog = buildCatalog(works, { generatedAt: new Date(NOW.getTime() - 60 * 60 * 1000).toISOString() }); // 1 時間前の生成
   let n = 0;
   /** 偽の fetch・sleep・時計で main を動かす。db を渡すと同じ履歴を引き継ぐ */
-  async function cli(args: string[], env: Record<string, string> = KEYS, replies: Reply[] = [OK], db = join(dir, `h${n++}.sqlite`)) {
+  async function cli(args: string[], env: Record<string, string> = KEYS, replies: Reply[] = [OK], db = join(dir, `h${n++}.sqlite`), cat = catalog) {
     const f = fakeFetch(replies), out: string[] = [], err: string[] = [], sleeps: number[] = [];
-    const code = await main(args, { DB_PATH: db, ...env }, { catalog, fetchImpl: f.impl, now: () => NOW, sleep: async (ms) => { sleeps.push(ms); }, out: (l) => out.push(l), err: (l) => err.push(l) });
+    const code = await main(args, { DB_PATH: db, ...env }, { catalog: cat, fetchImpl: f.impl, now: () => NOW, sleep: async (ms) => { sleeps.push(ms); }, out: (l) => out.push(l), err: (l) => err.push(l) });
     return { code, out: out.join('\n'), err: err.join('\n'), calls: f.calls, sleeps, db };
   }
   const recorded = (db: string, dryRun: boolean): number => { const s = openPostStore(db); try { return s.countPostsOn(DAY, dryRun); } finally { s.close(); } };
@@ -196,5 +197,25 @@ describe('CLI（post）', () => {
     const r = await cli(['post', '--count', '1', '--with-url', '--kind', 'feature'], { ...KEYS, SITE_URL: 'https://example.com/' });
     assert.match(textOf(r.calls[0]), / #PR\nhttps:\/\/example\.com\/v\/W\d\/$/);
     assert.equal(recorded(r.db, false), 1);
+  });
+  it('カタログの生成から 24 時間を超えている・生成時刻が無いときは投稿を見送り、理由を出す（dry-run でも。通信も記録もしない）', async () => {
+    const old = buildCatalog(works, { generatedAt: new Date(NOW.getTime() - 25 * 60 * 60 * 1000).toISOString() });
+    for (const [args, env] of [[['post'], KEYS], [['post', '--dry-run'], {}]] as const) {
+      const r = await cli([...args], env, [OK], undefined, old);
+      assert.equal(r.code, 0);
+      assert.match(r.out, /投稿を見送ります: .*25 時間/);
+      assert.deepEqual([r.calls.length, recorded(r.db, false), recorded(r.db, true)], [0, 0, 0]);
+    }
+    const none = await cli(['post', '--dry-run'], {}, [OK], undefined, buildCatalog(works));
+    assert.match(none.out, /\[dry-run\] 投稿を見送ります: .*generatedAt/);
+    const fresh = await cli(['post', '--count', '1', '--dry-run'], {}, [OK], undefined, buildCatalog(works, { generatedAt: new Date(NOW.getTime() - 23 * 60 * 60 * 1000).toISOString() }));
+    assert.equal(recorded(fresh.db, true), 1);
+  });
+  it('投稿文に価格・割引率を入れない（セール中の作品でも「セール中」の語だけ）', async () => {
+    const sale = (id: string): CatalogWork => ({ ...work(id, 'セール中'), priceMin: 980, listPrice: 1980, derivedLabels: ['セール中', '新作'] }) as CatalogWork;
+    const cat = buildCatalog(Array.from({ length: 8 }, (_, i) => sale(`S${i}`)), { generatedAt: NOW.toISOString() });
+    const r = await cli(['post', '--count', '3', '--dry-run', '--kind', 'sale'], {}, [OK], undefined, cat);
+    assert.equal((r.out.match(/ #PR/g) ?? []).length, 3);
+    assert.ok(!/円|％|%|OFF|割引/.test(r.out), r.out);
   });
 });

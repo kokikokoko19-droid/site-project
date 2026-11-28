@@ -49,6 +49,7 @@ type Facts = {
   regular: string;     // セール中のときの通常価格（セール中ラベルがあり、定価が現在価格より高いときだけ）
   note: string;        // ラベル句
   tag: string;         // 先頭の派生ラベル（X投稿の頭に置く）
+  onSale: boolean;     // 「セール中」ラベルがある（X投稿では価格の代わりにこの語だけを出す）
   title: string;
 };
 
@@ -66,7 +67,7 @@ function facts(w: CatalogWork): Facts {
     avg: hasReview ? avg.toFixed(1) : '', count: hasReview ? w.reviewCount : 0,
     price: yen(w.priceMin), regular: sale ? yen(w.listPrice) : '',
     note: NOTES.find(([label]) => w.derivedLabels.includes(label))?.[1] ?? '',
-    tag: w.derivedLabels[0] ?? '', title: (w.title ?? '').trim(),
+    tag: w.derivedLabels[0] ?? '', onSale: w.derivedLabels.includes('セール中'), title: (w.title ?? '').trim(),
   };
 }
 
@@ -147,11 +148,15 @@ const CARD: ((f: Facts) => string[])[] = [
   (f) => [f.genres.slice(0, 2).join('・'), f.min],
   (f) => [f.avg && `${f.avg}点（${f.count}件）`, f.min],
 ];
-/** X投稿用（5文型）。q は「題名」（題名が無ければ ''）。字数に収める処理は fitPost */
+/**
+ * X投稿用（5文型）。q は「題名」（題名が無ければ ''）。字数に収める処理は fitPost。
+ * 価格・割引率・セールの金額は入れない（第三者レビュー D-11。セールは日次更新の間に終わることがあり、古い価格の投稿は誤認表示になる）。
+ * セール中であることは「セール中」の語だけで示す。
+ */
 const POST: ((f: Facts, q: string) => string[])[] = [
   (f, q) => [f.tag, cat(subject(f, POST_NAMES), q, list(f.min, f.avg && `${f.avg}点`))],
   (f, q) => [cat(q, list(f.min, f.avg && `${f.avg}点`)), lead(f, POST_NAMES), f.tag],
-  (f, q) => [when(f), cat(subject(f, POST_NAMES), q, f.min), priceLine(f)],
+  (f, q) => [when(f), cat(subject(f, POST_NAMES), q, f.min), f.onSale ? 'セール中' : ''],
   (f, q) => [f.tag, cat(q, who(f, POST_NAMES) && `（${who(f, POST_NAMES)}）`), review(f)],
   (f, q) => [cat(q, f.min), subject(f, POST_NAMES), genre(f, 'ジャンルは', 3)],
 ];

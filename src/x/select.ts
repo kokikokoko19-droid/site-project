@@ -80,3 +80,23 @@ export function selectWorks(catalog: Catalog, store: SelectStore, opts: SelectOp
   }
   return picked;
 }
+
+/** カタログの生成からこれ以上たっていたら投稿しない（第三者レビュー D-11。セールや配信状況が変わった後の投稿を避ける） */
+export const MAX_CATALOG_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * カタログの生成時刻（index.json の generatedAt）が投稿に使える新しさかを調べる。
+ * 使えるときは null、使えないときは見送る理由を返す。生成時刻が無い・読めないときも見送る（新しさを確かめられないため）。
+ * 生成時刻が now より未来のときは（時計の差とみなし）使える扱いにする。
+ */
+export function staleCatalogReason(generatedAt: string | null, now: Date, maxAgeMs: number = MAX_CATALOG_AGE_MS): string | null {
+  if (!generatedAt) return 'カタログの生成時刻（generatedAt）が無く、新しさを確かめられません';
+  const t = Date.parse(generatedAt);
+  if (Number.isNaN(t)) return `カタログの生成時刻（generatedAt）を読めません: ${generatedAt}`;
+  const age = now.getTime() - t;
+  if (age > maxAgeMs) {
+    const hours = Math.floor(age / (60 * 60 * 1000));
+    return `カタログの生成（${generatedAt}）から ${Math.round(maxAgeMs / (60 * 60 * 1000))} 時間を超えています（経過 ${hours} 時間）`;
+  }
+  return null;
+}

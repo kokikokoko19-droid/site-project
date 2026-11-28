@@ -146,6 +146,17 @@ describe('X投稿', () => {
     assert.ok(postText(w).includes('「題名'));
   });
   it('題名が短ければそのまま入る', () => assert.equal(renderPost(mk(), 0), '新作。出演者A、出演者B出演「作品 0001」120分、4.3点。 #PR'));
+  it('価格・割引率・セールの金額を入れない。セール中は「セール中」の語だけ（D-11）', () => {
+    const sale = mk({ priceMin: 980, listPrice: 1980 });
+    for (const w of [sale, mk({ derivedLabels: [] }), mk({ derivedLabels: ['セール中'] })]) {
+      for (const v of range(VARIANT_COUNT.post)) {
+        const t = renderPost(w, v);
+        assert.ok(!/円|％|%|OFF|通常/.test(t), `post#${v} に価格: ${t}`);
+      }
+    }
+    assert.equal(renderPost(sale, 2), '2026/11/01配信開始。出演者A、出演者B出演「作品 0001」120分。セール中。 #PR');
+    assert.ok(!renderPost(mk({ derivedLabels: ['新作'] }), 2).includes('セール'));
+  });
 });
 
 describe('文型の選び方', () => {
