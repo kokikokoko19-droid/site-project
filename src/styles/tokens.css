@@ -12,6 +12,9 @@
   --accent-soft: rgba(217, 164, 65, .14);
   --seal: #c9392b;           /* 朱（印とセール札） */
   --seal-ink: #fff3ee;
+  --cta: #d81b60;            /* FANZA へ飛ぶボタンだけに使うピンク（運営者決定 2026-11-28）。白文字で 4.9:1 */
+  --cta-ink: #ffffff;
+  --cta-hover: #e63a7a;
   --warn: #e0574f;           /* 警告（下書きバッジなど） */
   --line: #342b25;           /* 境界線 */
   --line-strong: #4a3d33;    /* 強い境界線 */

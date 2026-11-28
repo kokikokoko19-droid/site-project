@@ -170,6 +170,11 @@ p { margin: 0; }
 .btn-cta.btn-block[data-cta] { min-height: 48px; font-size: 15px; }
 @media (min-width: 640px) { .btn-cta.btn-block[data-cta] { max-width: 480px; margin-inline: auto; } }
 .btn-cta:focus-visible { outline-color: var(--fg0); }
+/* FANZA へ飛ぶボタン（/go/ へのリンク。作品ページの CtaButton、ブロック、探索のモーダル、スマホの下部の帯）だけピンクにする。
+   年齢確認の「18歳以上です」やぶらぶらの「次の棚へ」など、サイト内の強調ボタンは琥珀のまま（運営者決定 2026-11-28） */
+.btn-cta[data-cta], a.btn-cta[href^="/go/"] { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); }
+.btn-cta[data-cta]:hover, a.btn-cta[href^="/go/"]:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
+.btn-cta[data-cta] small, a.btn-cta[href^="/go/"] small { opacity: .9; }
 
 /* 絞り込みパネル（探索） */
 .explore { display: grid; gap: calc(var(--sp) * 3); }
