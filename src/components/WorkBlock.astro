@@ -94,7 +94,8 @@ const auto = text === '' ? summaryText(work, { price: false }) : '';
   .work-block .wb-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; color: inherit; padding: 5px 0; /* 押せる範囲を 32px 以上に（C-18）。display は省略表示のため -webkit-box のまま */ }
   .work-block .wb-cover { display: block; }
   .work-block .wb-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; font-size: 13px; color: var(--fg2); }
-  .work-block .wb-samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  /* サンプル画像はブロックの幅いっぱいに縦に積む（参考サイトと同じ見せ方。運営者指示 2026-11-28「写真を大きく」）。枠は 4:3 で contain、切り取りはしない */
+  .work-block .wb-samples { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
   .work-block .wb-samples > span { position: relative; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 2px; background: var(--bg2); }
   .work-block .wb-samples img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
   /* 運営者の文（docs/07 の 11 章）の改行をそのまま見せる */
@@ -104,10 +105,6 @@ const auto = text === '' ? summaryText(work, { price: false }) : '';
   .work-block .wb-cta .btn { min-width: 200px; }
   @media (max-width: 639px) {
     .work-block .wb-head { font-size: 16px; }
-    /* スマホは横スクロールの帯（1 枚が画面幅の 72% 程度、スナップ） */
-    .work-block .wb-samples { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
-    .work-block .wb-samples::-webkit-scrollbar { display: none; }
-    .work-block .wb-samples > span { flex: 0 0 72%; scroll-snap-align: start; }
     .work-block .wb-cta .btn { display: flex; width: 100%; }
   }
 </style>
