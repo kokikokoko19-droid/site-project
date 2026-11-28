@@ -2,7 +2,7 @@
 // 作品のブロック（「○○のおすすめ作品 10 選」型の記事の 1 作品分）。出演者ページの「おすすめ作品 N 選」と特集ページで使う。
 // 上から: 順位と題名 → 表紙 → データの 1 行 → 公式サンプル画像（先頭 3 枚）→ 一言 → 「FANZAで見る」。
 // 画像は公式配信の直リンクをそのまま出す。規約により加工は拡大縮小のみ（切り取らず object-fit: contain で枠に収める）。
-// 一言は運営者の note があればそれ、無ければデータから機械的に作る自動文（summaryText。非露骨）。公式の紹介文・レビュー本文は使わない。
+// 一言は運営者の note（特集の frontmatter、または data/copy.json の作品の文）があればそれ、無ければデータから機械的に作る自動文（summaryText。非露骨）。公式の紹介文・レビュー本文は使わない。
 // 出演者ページは数千ページ生成されるので、属性は必要なものだけにする（1 ページ 10 ブロックで HTML 30KB 以内）。
 import type { CatalogWork } from '../lib/catalog.ts';
 import { toCard } from '../lib/card.ts';
@@ -97,7 +97,8 @@ const auto = text === '' ? summaryText(work, { price: false }) : '';
   .work-block .wb-samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .work-block .wb-samples > span { position: relative; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 2px; background: var(--bg2); }
   .work-block .wb-samples img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-  .work-block .wb-note { margin: 0; line-height: 1.8; }
+  /* 運営者の文（docs/07 の 11 章）の改行をそのまま見せる */
+  .work-block .wb-note { margin: 0; line-height: 1.8; white-space: pre-line; overflow-wrap: anywhere; }
   .work-block .wb-note.auto { color: var(--fg2); font-size: 14px; }
   .work-block .wb-cta { margin: 0; }
   .work-block .wb-cta .btn { min-width: 200px; }

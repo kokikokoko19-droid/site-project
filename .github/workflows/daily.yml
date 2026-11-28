@@ -127,6 +127,14 @@ jobs:
           echo "認証情報がないため、API を使わず合成データ 3000 件で代替します（cache は使いません）。"
           npm run ingest -- --synthetic 3000
 
+      # 運営者の文（作品の一言・出演者の紹介）を Google スプレッドシートの Apps Script から取得し、data/copy.json に書く（docs/07 の 11 章）。
+      # COPY_FEED_URL（token つきの URL）はこのステップにだけ渡す。未登録なら何もしない。取得に失敗しても日次は止めない。
+      # 要約には work と actress の件数だけを出す（本文は出さない）。data/copy.json はコミットせず、cache にも入れない。
+      - name: 運営者の文を取得する
+        env:
+          COPY_FEED_URL: ${{ secrets.COPY_FEED_URL }}
+        run: npm run fetch:copy
+
       - name: 派生データを計算する
         run: npm run derive
 
