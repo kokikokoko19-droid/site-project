@@ -1,13 +1,13 @@
 # 日次の更新（設計方針 8.1）。
-# 毎日 日本時間 06:00 に、取り込み → 派生計算 → 書き出し → ビルドを行い、dist/ を artifact に残す。
+# 毎日 日本時間 03:00 に開始し（GitHub 側の遅れが数時間あるため早め。実行は約 1 時間）、取り込み → 派生計算 → 書き出し → ビルドを行い、dist/ を artifact に残す。
 # 配信（mixhost への rsync/SSH）は deploy ジョブ。実データの実行で、配信用の secrets が揃っているときだけ転送する。
 # 手順と運用上の注意（cache の扱い、secrets の登録、失敗時の見方）は docs/07_運用手順.md を参照。
 name: Daily
 
 on:
   schedule:
-    # 日本時間 06:00 = UTC 21:00（前日）。GitHub 側の混雑で数分から十数分遅れることがある。
-    - cron: '0 21 * * *'
+    # 日本時間 03:00 = UTC 18:00（前日）。GitHub 側の混雑で 30 分〜数時間遅れることがある（2026-11 の実測）ので、朝 6 時に間に合うよう早めに始める。
+    - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       recent_days:
@@ -169,7 +169,8 @@ jobs:
         with:
           name: dist
           path: dist/
-          retention-days: 7
+          # 配信ジョブが同じ実行の中でダウンロードするだけなので 1 日でよい。1 日約 200MB あり、7 日保存だと非公開リポジトリの保存枠（500MB）を大きく超える（2026-11-28）
+          retention-days: 1
           if-no-files-found: error
           # .htaccess や .well-known など、ドットで始まるファイルも含める
           include-hidden-files: true
