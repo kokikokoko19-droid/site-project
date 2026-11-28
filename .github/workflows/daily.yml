@@ -134,11 +134,11 @@ jobs:
         run: npm run export
 
       - name: 公開の切替を要約に出す
-        # Variables が未設定のときは仮公開の状態（noindex=1、affiliate=off）で作る。本公開のときに PUBLIC_NOINDEX=off、AFFILIATE_LINKS=on を設定する
+        # 本公開（DMM 承認後）。Variables が未設定のときは本公開の状態（noindex=off、affiliate=on）で作る。仮公開に戻すときは PUBLIC_NOINDEX=1、AFFILIATE_LINKS=off を Variables に設定する
         # 切替は Settings > Secrets and variables > Actions の Variables で行う（docs/07_運用手順.md の 3.3 節）。値そのものは出さず、on/off と有無だけ出す
         env:
-          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX || '1' }}
-          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS || 'off' }}
+          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX || 'off' }}
+          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS || 'on' }}
           PUBLIC_GA4_ID: ${{ vars.PUBLIC_GA4_ID }}
         run: |
           noindex=off; [ "$PUBLIC_NOINDEX" = "1" ] && noindex=on
@@ -146,12 +146,23 @@ jobs:
           ga4=無; [ -n "$PUBLIC_GA4_ID" ] && ga4=有
           echo "公開の切替: noindex=$noindex、affiliate=$affiliate、GA4=$ga4" | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: アフィリエイト有効時はサイト用 ID があることを確かめる
+        # on なのに FANZA_SITE_AFFILIATE_ID が無いと、API 用 ID（末尾 990 番台）がリンクに残る。API 用 ID はリンク用ではないので、ここで止める
+        env:
+          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS || 'on' }}
+          FANZA_SITE_AFFILIATE_ID: ${{ secrets.FANZA_SITE_AFFILIATE_ID }}
+        run: |
+          if [ "$AFFILIATE_LINKS" = "on" ] && [ -z "$FANZA_SITE_AFFILIATE_ID" ]; then
+            echo "::error title=サイト用 ID なし::AFFILIATE_LINKS=on ですが secrets の FANZA_SITE_AFFILIATE_ID が未登録です。承認後に発行された ID（末尾 990 番台以外）を登録するか、Variables で AFFILIATE_LINKS=off にしてください。"
+            exit 1
+          fi
+
       - name: サイトをビルドする
         # prebuild が走り、scripts/copy-export.mjs が data/export の JSON を public/data にコピーする。
         # postbuild の check-dist は AFFILIATE_LINKS を見て、/go/ の移動先と dist 全体の affi_id を検査する
         env:
-          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX || '1' }}
-          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS || 'off' }}
+          PUBLIC_NOINDEX: ${{ vars.PUBLIC_NOINDEX || 'off' }}
+          AFFILIATE_LINKS: ${{ vars.AFFILIATE_LINKS || 'on' }}
           PUBLIC_GA4_ID: ${{ vars.PUBLIC_GA4_ID }}
           FANZA_SITE_AFFILIATE_ID: ${{ secrets.FANZA_SITE_AFFILIATE_ID }}
         run: npm run build
