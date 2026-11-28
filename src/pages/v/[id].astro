@@ -14,7 +14,9 @@ import CtaButton from '../../components/CtaButton.astro';
 import AxisLinks from '../../components/AxisLinks.astro';
 import SampleMovie from '../../components/SampleMovie.astro';
 import SampleGallery from '../../components/SampleGallery.astro';
+import OpNote from '../../components/OpNote.astro';
 import { loadCatalog } from '../../lib/catalog.ts';
+import { loadCopy } from '../../lib/copy.ts';
 import type { CatalogWork } from '../../lib/catalog.ts';
 import { pageText, positionOf, summaryText } from '../../lib/autotext.ts';
 import { cardLabels, saleEnd } from '../../lib/card.ts';
@@ -40,6 +42,8 @@ const mainSeries = work.series.find((s) => s.id && (s.name ?? '').trim() !== '')
 
 // 本文は位置づけの1〜2文。meta description は事実を並べた要約の先頭120字（超えるときは末尾に「…」）
 const text = pageText(work, positionOf(catalog, work));
+// 運営者の文（スプレッドシートから取り込んだ data/copy.json。docs/07 の 11 章）。あれば自動文の上に「編集部のひとこと」として出す
+const opNote = loadCopy().work.get(work.contentId) ?? '';
 const summary = summaryText(work);
 const chars = [...summary];
 const description = chars.length === 0 ? undefined : chars.length > 120 ? `${chars.slice(0, 120).join('')}…` : summary;
@@ -208,10 +212,15 @@ const STICKY_SCRIPT = `(function () {
         }
 
         {
-          text && (
+          (text || opNote) && (
             <div class="work-text">
-              <p>{text}</p>
-              <p class="auto-note">作品データから自動で作成した紹介です</p>
+              <OpNote heading="編集部のひとこと" text={opNote} />
+              {text && (
+                <>
+                  <p>{text}</p>
+                  <p class="auto-note">作品データから自動で作成した紹介です</p>
+                </>
+              )}
             </div>
           )
         }
@@ -317,7 +326,8 @@ const STICKY_SCRIPT = `(function () {
   .work-movie { grid-area: movie; }
   .work-gallery { grid-area: gallery; }
   .work-text { grid-area: text; display: grid; gap: 6px; }
-  .work-text p { font: 400 15px/1.85 var(--font); color: var(--fg1); }
+  .work-text .op-note { margin-bottom: calc(var(--sp) * 1.5); }
+  .work-text > p { font: 400 15px/1.85 var(--font); color: var(--fg1); }
   .work-text .auto-note { font-size: 11.5px; line-height: 1.5; color: var(--fg2); }
   .work-spec { grid-area: spec; display: grid; gap: calc(var(--sp) * 2); }
   .work-price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }

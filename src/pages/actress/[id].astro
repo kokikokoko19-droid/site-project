@@ -1,7 +1,8 @@
 ---
-// 出演者ページ（/actress/{id}/）。索引（catalog.byActress）のキーごとに1ページ作る。中身は ActressPage。
+// 出演者ページ（/actress/{id}/）。索引（catalog.byActress）のキーごとに1ページ作る。中身は ActressPage。運営者の文（loadCopy）もここで渡す。
 import ActressPage from '../../components/ActressPage.astro';
 import { loadCatalog } from '../../lib/catalog.ts';
+import { loadCopy } from '../../lib/copy.ts';
 
 export function getStaticPaths() {
   const catalog = loadCatalog();
@@ -13,6 +14,8 @@ export function getStaticPaths() {
 
 const { id } = Astro.params as { id: string };
 const { name, works } = Astro.props;
+// 運営者の文（data/copy.json。docs/07 の 11 章）。出演者の紹介はヘッダーの直下、作品の一言はおすすめ N 選に添える
+const copy = loadCopy();
 ---
 
-<ActressPage id={id} name={name} works={works} />
+<ActressPage id={id} name={name} works={works} notes={copy.work} copy={copy.actress.get(id)} />

@@ -1,0 +1,36 @@
+---
+// 運営者の文（Google スプレッドシートから取り込んだもの。docs/07 の 11 章、src/lib/copy.ts）を出す枠。
+// 作品ページの「編集部のひとこと」と出演者ページの「編集部から」で使う。text が空なら何も出さない。
+// 本文は改行 2 つで段落（<p>）に分け、段落の中の改行 1 つは white-space: pre-line でそのまま見せる。
+// 中身は信用しない入力なので、Astro の既定のエスケープで出す（set:html は使わない）。
+import { paragraphs } from '../lib/copy.ts';
+
+interface Props {
+  /** 見出し（例: 編集部のひとこと） */
+  heading: string;
+  text?: string;
+  /** 見出しの要素（既定 h2） */
+  level?: 'h2' | 'h3';
+}
+
+const { heading, text = '', level = 'h2' } = Astro.props;
+const paras = paragraphs(text);
+const H = level;
+---
+
+{
+  paras.length > 0 && (
+    <section class="op-note">
+      <H class="op-note-head">{heading}</H>
+      {paras.map((p) => <p>{p}</p>)}
+    </section>
+  )
+}
+
+<style is:global>
+  /* is:global にする理由: scoped だと属性が付いて数千ページ分の HTML が膨らむ。.op-note の配下だけに効かせる */
+  .op-note { display: grid; gap: 8px; max-width: 44em; min-width: 0; padding: calc(var(--sp) * 2) calc(var(--sp) * 2.5); border-left: 2px solid var(--accent); background: var(--bg2); border-radius: 0 3px 3px 0; }
+  .op-note .op-note-head { margin: 0; font: 700 13px/1.4 var(--font-display, var(--font)); color: var(--accent); letter-spacing: .12em; }
+  .op-note p { margin: 0; font: 400 15px/1.85 var(--font); color: var(--fg0); white-space: pre-line; overflow-wrap: anywhere; }
+  @media (max-width: 639px) { .op-note { padding: calc(var(--sp) * 1.5) calc(var(--sp) * 2); } }
+</style>

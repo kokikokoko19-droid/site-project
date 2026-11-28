@@ -13,6 +13,7 @@ import WorkGrid from './WorkGrid.astro';
 import WorkBlock from './WorkBlock.astro';
 import ProfileTable from './ProfileTable.astro';
 import Toc from './Toc.astro';
+import OpNote from './OpNote.astro';
 import { loadCatalog } from '../lib/catalog.ts';
 import type { CatalogWork } from '../lib/catalog.ts';
 import { actressStats, globalMeanAvg, workBayes } from '../lib/actress-stats.ts';
@@ -25,9 +26,11 @@ interface Props {
   works: CatalogWork[];
   /** おすすめ N 選に添える運営者の一言（content_id → 文）。無ければ自動文 */
   notes?: ReadonlyMap<string, string>;
+  /** 運営者の紹介文（スプレッドシートから取り込んだもの。docs/07 の 11 章）。あればヘッダーの直下に「編集部から」として出す */
+  copy?: string;
 }
 
-const { id, name, works } = Astro.props;
+const { id, name, works, copy = '' } = Astro.props;
 const catalog = loadCatalog();
 const profile = catalog.actressProfiles.get(id) ?? null;
 const stats = actressStats(catalog).get(id)!;
@@ -46,7 +49,7 @@ const meanAvg = globalMeanAvg(catalog);
 const top = total >= TOP_MIN
   ? works.map((w) => ({ w, score: workBayes(w, meanAvg) })).sort((a, b) => b.score - a.score).slice(0, 10)
   : [];
-// 運営者の一言（作品ID → 文）。将来、別の置き場から結合する。いまは空なので自動文が出る
+// 運営者の一言（作品ID → 文）。呼び出し側（pages/actress/[id].astro）が loadCopy().work を渡す。無い作品は自動文
 const notes: ReadonlyMap<string, string> = Astro.props.notes ?? new Map();
 const latest = total >= TOP_MIN ? works[0] : undefined;
 const recent = total >= TOP_MIN ? works.slice(1, 4) : [];
@@ -98,6 +101,8 @@ const exploreHref = `/explore/?act=${encodeURIComponent(name)}`;
       <h1>{heading}{!ranking && <span class="h1-count">（{total}本）</span>}</h1>
       <p class="auto-lead">{intro}</p>
     </header>
+
+    <OpNote heading="編集部から" text={copy} />
 
     {
       latest && (

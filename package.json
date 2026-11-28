@@ -16,6 +16,7 @@
     "ingest": "node --experimental-strip-types src/data/cli.ts ingest",
     "derive": "node --experimental-strip-types src/data/cli.ts derive",
     "export": "node --experimental-strip-types src/data/cli.ts export",
+    "fetch:copy": "node --experimental-strip-types scripts/fetch-copy.mjs",
     "x:post": "node --experimental-strip-types src/x/cli.ts post",
     "draft:weekly": "node --experimental-strip-types scripts/draft-weekly.ts",
     "draft:feature": "node --experimental-strip-types scripts/draft-feature.ts"

@@ -5,6 +5,7 @@ import { getCollection, render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import WorkBlock from '../../components/WorkBlock.astro';
 import { loadCatalog } from '../../lib/catalog.ts';
+import { loadCopy } from '../../lib/copy.ts';
 import type { CatalogWork } from '../../lib/catalog.ts';
 import '../../styles/article.css';
 
@@ -21,11 +22,13 @@ const { Content } = await render(entry);
 // items（{ id, note? } の配列）があればその順と一言を使い、無ければ works（content_id の配列）を使う。
 // 書いた順を保ち、重複（先に書いた方を残す）とカタログに無いID（取り下げ・打ち間違い）は飛ばす
 const catalog = loadCatalog();
+// 一言は frontmatter の note が優先。無い作品は運営者の文（data/copy.json。docs/07 の 11 章）、それも無ければ WorkBlock の自動文
+const copyWork = loadCopy().work;
 const source = data.items ?? data.works.map((id) => ({ id, note: undefined }));
 const seen = new Set<string>();
 const entries = source.filter((it) => !seen.has(it.id) && seen.add(it.id));
 const works = entries
-  .map((it) => ({ w: catalog.byId.get(it.id), note: it.note }))
+  .map((it) => ({ w: catalog.byId.get(it.id), note: it.note?.trim() || copyWork.get(it.id) }))
   .filter((x): x is { w: CatalogWork; note: string | undefined } => x.w !== undefined);
 const skipped = entries.map((it) => it.id).filter((id) => !catalog.byId.has(id));
 if (skipped.length > 0) {

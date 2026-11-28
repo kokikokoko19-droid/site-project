@@ -9,7 +9,7 @@ import { postText } from '../src/lib/autotext.ts';
 import { buildCatalog } from '../src/lib/catalog.ts';
 import type { CatalogWork } from '../src/lib/catalog.ts';
 import { composePost } from '../src/x/compose.ts';
-import { selectWorks } from '../src/x/select.ts';
+import { MAX_CATALOG_AGE_MS, selectWorks, staleCatalogReason } from '../src/x/select.ts';
 import { jstDateKey, openPostStore } from '../src/x/store.ts';
 import type { PostStore } from '../src/x/store.ts';
 
@@ -175,5 +175,20 @@ describe('composePost', () => {
     assert.throws(() => composePost(long, { withUrl: true, siteUrl: '' }), /SITE_URL/);
     assert.throws(() => composePost(long, { withUrl: true, siteUrl: 'example.com' }), /SITE_URL/);
     assert.throws(() => composePost(long, { withUrl: true, siteUrl: `https://example.com/${'p'.repeat(120)}` }), /長すぎ/);
+  });
+});
+
+describe('staleCatalogReason（カタログの新しさ）', () => {
+  const at = (ms: number): string => new Date(NOW.getTime() - ms).toISOString();
+  it('24 時間以内なら null（投稿してよい）。ちょうど 24 時間も可', () => {
+    assert.equal(MAX_CATALOG_AGE_MS, DAY);
+    for (const ms of [0, 60_000, DAY - 1, DAY]) assert.equal(staleCatalogReason(at(ms), NOW), null, String(ms));
+    assert.equal(staleCatalogReason(at(-60_000), NOW), null, '時計の差で少し未来でも可');
+  });
+  it('24 時間を超える・無い・読めないときは理由を返す', () => {
+    assert.match(staleCatalogReason(at(DAY + 1), NOW) ?? '', /24 時間/);
+    assert.match(staleCatalogReason(at(3 * DAY), NOW) ?? '', /経過 72 時間/);
+    assert.match(staleCatalogReason(null, NOW) ?? '', /generatedAt/);
+    assert.match(staleCatalogReason('x', NOW) ?? '', /読めません/);
   });
 });

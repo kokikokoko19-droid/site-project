@@ -145,12 +145,20 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
     <slot name="head" />
   </head>
   <body class:list={{ 'show-ad-slots': showAdSlots }}>
-    {/* 年齢確認。本文より先に置き、初回表示で本文が見えてしまうのを防ぐ */}
-    <div class="age-gate" id="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-title">
+    {/* 本文へのスキップリンク（第三者レビュー C-17）。焦点が当たったときだけ見える。年齢確認が開いている間は inert になる */}
+    <a class="skip" href="#main">本文へ移動</a>
+    {/* JS が無いときは年齢確認が開かないので、本文の先頭に警告だけを出す（第三者レビュー D-10） */}
+    <noscript>
+      <p class="age-noscript" role="note"><strong>18歳未満の方は閲覧できません。</strong>このサイトは成人向けの作品情報を扱います。</p>
+    </noscript>
+    {/* 年齢確認。本文より先に置き、初回表示で本文が見えてしまうのを防ぐ。
+        開いている間は背後（body の他の子要素）を inert にする（第三者レビュー C-14・D-10）。
+        保存は localStorage の age_ok に {"ok":1,"at":保存時刻（ミリ秒）} で持ち、30 日で失効させる（旧形式の '1' も失効扱い） */}
+    <div class="age-gate" id="age-gate" role="dialog" aria-modal="true" aria-labelledby="age-title" aria-describedby="age-desc">
       <div class="age-box">
-        <Mark />
+        <div class="age-brand"><Mark />{SITE_NAME}</div>
         <h2 id="age-title">年齢確認</h2>
-        <p class="muted">このサイトは成人向けの作品情報を扱います。<br />あなたは18歳以上ですか。</p>
+        <p class="age-desc" id="age-desc">このサイトは成人向けの作品情報を扱います。<br /><strong>18歳未満の方は閲覧できません。</strong><br />あなたは18歳以上ですか。</p>
         <div class="row">
           <button class="btn btn-cta" id="age-yes" type="button">18歳以上です</button>
           <button class="btn" id="age-no" type="button">18歳未満です</button>
@@ -159,14 +167,44 @@ gtag('config', ${JSON.stringify(ga4Id)}, { anonymize_ip: true, allow_google_sign
     </div>
     <script is:inline>
       (function () {
+        var KEY = 'age_ok';
+        var TTL = 30 * 24 * 60 * 60 * 1000; // 30 日
+        var DAY = 24 * 60 * 60 * 1000;
         var gate = document.getElementById('age-gate');
         var yes = document.getElementById('age-yes');
-        var ok = false;
-        try { ok = localStorage.getItem('age_ok') === '1'; } catch (e) {}
-        if (!ok) { gate.classList.add('open'); yes.focus(); }
+        // 保存が 30 日以内なら確認済み。保存時刻が読めない・未来すぎる（1 日超）ときは失効扱い
+        function valid() {
+          try {
+            var v = JSON.parse(localStorage.getItem(KEY) || 'null');
+            var at = v && v.ok === 1 ? Number(v.at) : NaN;
+            var age = Date.now() - at;
+            return isFinite(age) && age >= -DAY && age <= TTL;
+          } catch (e) { return false; }
+        }
+        // 年齢確認以外の body の子要素（スキップリンク・ヘッダー・PR 帯・main・footer）の inert を切り替える
+        function setInert(on) {
+          var kids = document.body.children;
+          for (var i = 0; i < kids.length; i++) {
+            var el = kids[i];
+            if (el === gate || el.tagName === 'SCRIPT' || el.tagName === 'NOSCRIPT') continue;
+            if (on) el.setAttribute('inert', ''); else el.removeAttribute('inert');
+          }
+        }
+        if (!valid()) {
+          gate.classList.add('open');
+          document.documentElement.classList.add('age-open');
+          setInert(true);
+          // この時点ではヘッダー以降がまだ読まれていないので、読み終えたらもう一度付ける
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function () { if (gate.classList.contains('open')) setInert(true); });
+          }
+          yes.focus();
+        }
         yes.addEventListener('click', function () {
-          try { localStorage.setItem('age_ok', '1'); } catch (e) {}
+          try { localStorage.setItem(KEY, JSON.stringify({ ok: 1, at: Date.now() })); } catch (e) {}
           gate.classList.remove('open');
+          document.documentElement.classList.remove('age-open');
+          setInert(false);
         });
         document.getElementById('age-no').addEventListener('click', function () {
           location.href = 'about:blank';
