@@ -91,7 +91,7 @@ const auto = text === '' ? summaryText(work, { price: false }) : '';
   .work-block + .work-block { margin-top: calc(var(--sp) * 6); padding-top: calc(var(--sp) * 3); border-top: 1px solid rgba(255,255,255,.08); }
   .work-block .wb-head { display: flex; align-items: flex-start; gap: 12px; margin: 0; font-size: 18px; line-height: 1.45; }
   .work-block .wb-head .rank-no { font-size: 30px; line-height: 1; min-width: 0; }
-  .work-block .wb-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; color: inherit; }
+  .work-block .wb-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; overflow-wrap: anywhere; color: inherit;; display: inline-block; padding: 5px 0; /* 押せる範囲を 32px 以上に（C-18） */ }
   .work-block .wb-cover { display: block; }
   .work-block .wb-facts { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0; font-size: 13px; color: var(--fg2); }
   .work-block .wb-samples { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
