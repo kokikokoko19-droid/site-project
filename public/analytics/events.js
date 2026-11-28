@@ -90,12 +90,6 @@
       return;
     }
 
-    // サンプル動画の再生ボタン（SampleMovie.astro）
-    if ((el = t.closest('[data-sample-play]'))) {
-      send('sample_play', { content_id: currentWorkId() });
-      return;
-    }
-
     // 探索ページのチップ（絞り込み、目的別、適用中の条件を外す）。選んだ値（ジャンル名など）は送らない
     if ((el = t.closest('#panel .chip, #purpose .chip, #active-chips .chip'))) {
       send('filter_use', { filter: 'chip', filter_key: chipKey(el) });

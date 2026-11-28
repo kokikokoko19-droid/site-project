@@ -30,7 +30,7 @@ export const norm = (s) => String(s).normalize('NFKC').toLowerCase();
 
 export const defaults = () => ({
   sort: 'rec', g: [], act: '', ser: '', mak: '', pb: [], len: '', year: '', days: '',
-  sale: false, sample: false, rev: false, lab: [], q: '',
+  sale: false, rev: false, lab: [], q: '',
 });
 
 /** 旧 URL の価格の範囲（pmin・pmax、円）を、重なる価格帯にする */
@@ -54,6 +54,7 @@ const numOr = (v) => (v !== null && v.trim() !== '' && Number.isFinite(Number(v)
 /**
  * URLクエリ（location.search）から状態を作る。不正な値は既定値に戻す。
  * 互換: 旧 URL の sort=new はそのまま新しい順。重み（w_*）と len=short|mid|long は読み捨てる。pmin・pmax・vmin・vmax は価格帯と長さのチップに読み替える。
+ * sample=1（「サンプル動画あり」。2026-11-28 に動画の表示を廃止）も読み捨てる。
  */
 export function readURL(search) {
   const u = new URLSearchParams(search), st = defaults();
@@ -66,7 +67,6 @@ export function readURL(search) {
   st.pb = [...new Set(u.getAll('pb').filter((v) => /^[0-3]$/.test(v)).map(Number))].sort();
   st.len = LENGTH_KEYS.includes(u.get('len')) ? u.get('len') : '';
   st.sale = u.get('sale') === '1';
-  st.sample = u.get('sample') === '1';
   st.rev = u.get('rev') === '1';
   const [pmin, pmax, vmin, vmax] = ['pmin', 'pmax', 'vmin', 'vmax'].map((k) => numOr(u.get(k)));
   if (!st.pb.length && (pmin !== '' || pmax !== '')) st.pb = bandsFromRange(pmin, pmax);
@@ -82,7 +82,7 @@ export function toQuery(st) {
   for (const k of ['act', 'ser', 'mak']) if (st[k]) u.set(k, st[k]);
   [...st.pb].sort().forEach((b) => u.append('pb', String(b)));
   for (const k of ['len', 'year', 'days']) if (st[k]) u.set(k, st[k]);
-  for (const k of ['sale', 'sample', 'rev']) if (st[k]) u.set(k, '1');
+  for (const k of ['sale', 'rev']) if (st[k]) u.set(k, '1');
   st.lab.forEach((l) => u.append('lab', l));
   if (st.q) u.set('q', st.q);
   return u.toString();
@@ -131,7 +131,6 @@ export function activeChips(st) {
   if (st.year) out.push({ k: 'year', v: st.year, label: `${st.year}年` });
   if (st.days) out.push({ k: 'days', v: st.days, label: `${st.days}日以内` });
   if (st.sale) out.push({ k: 'sale', v: '1', label: 'セール中' });
-  if (st.sample) out.push({ k: 'sample', v: '1', label: 'サンプル動画あり' });
   if (st.rev) out.push({ k: 'rev', v: '1', label: '評価あり' });
   st.lab.forEach((l) => out.push({ k: 'lab', v: l, label: l }));
   return out;
@@ -194,7 +193,6 @@ export function matcher(st, ix, now = Date.now()) {
     if (st.year && w._y !== Number(st.year)) return false;
     if (since !== null && (w._t === null || w._t < since)) return false;
     if (st.sale && !w.sale) return false;
-    if (st.sample && !w.sm) return false;
     if (st.rev && w.rb == null) return false;
     if (st.lab.length && !st.lab.every((l) => w.lb.includes(l))) return false;
     return terms.every((t) => w._h.includes(t));

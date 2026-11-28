@@ -77,6 +77,6 @@ export function modalHtml(w, names) {
     ${labelsHtml(w.lb, w.lb.length)}
     <div class="mx-actions">
       <a class="btn btn-block" href="/v/${id}/">作品ページを開く</a>
-      ${w.ob === false ? '' : `<a class="btn btn-cta btn-block" href="/go/${id}/" rel="sponsored nofollow">FANZAで見る <small>（PR）</small></a>`}
+      ${w.ob === false ? '' : `<a class="btn btn-cta btn-block" href="/go/${id}/" rel="sponsored nofollow">FANZAで見る</a>`}
     </div>`;
 }

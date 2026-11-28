@@ -1,10 +1,11 @@
 ---
 // 作品ページ /v/{content_id}/（設計方針 2.1）。作品1件につき1ページを静的に生成する。
-// 並びは「題名 → 主画像 →（サンプル動画）→ 価格と FANZA ボタン（PR）→ サンプル画像 → 自動文 → 仕様表 → 似た作品 → 末尾の CTA」
-// （第三者レビュー A C1・B-3・D-8、運営者レビュー WP7）。動画は主画像の直下（スマホ）。動画が無い作品ではその枠を出さない。
-// PC は左列に横長のジャケットとサンプル動画、右列に題名・価格と CTA・自動文・仕様表を置き、サンプル画像は両列の下に通しで置く。
-// サンプル画像は公式の大きい版を縦に並べ、3 枚目の後と末尾に CTA（gallery-mid / gallery-end）を置く（SampleGallery.astro）。
-// スマホは、メインの CTA が画面外にある間だけ画面下に細い帯（価格と「FANZAで見る PR」）を出す（JS 無しでは出ない）。
+// 並びは「題名 → 主画像 → 価格と FANZA ボタン → サンプル画像 → 自動文 → 仕様表 → 似た作品 → 末尾の CTA」
+// （第三者レビュー A C1・B-3・D-8、運営者レビュー WP7）。サンプル動画はサイトのどこにも出さない（運営者決定 2026-11-28。docs/00）。
+// PC は左列に横長のジャケット、右列に題名・価格と CTA・自動文・仕様表を置き、サンプル画像は両列の下に通しで置く。
+// サンプル画像は公式の大きい版を 1 列（最大 760px。ブロックと同じ幅）で縦に並べ、3 枚目の後と末尾に CTA（gallery-mid / gallery-end）を置く（SampleGallery.astro）。
+// スマホは、メインの CTA が画面外にある間だけ画面下に細い帯（価格と「FANZAで見る」）を出す（JS 無しでは出ない）。
+// 広告表記（PR）はボタンには付けず、全ページ上部の帯（layouts/Base.astro の .pr-band）で担保する。
 // 紹介文は公式の文章を使わず、データ駆動の自動文（pageText）だけを出す。欠けた項目は行ごと省き、「不明」などは出さない。
 import Base from '../../layouts/Base.astro';
 import Shelf from '../../components/Shelf.astro';
@@ -12,7 +13,6 @@ import AdSlot from '../../components/AdSlot.astro';
 import Breadcrumb from '../../components/Breadcrumb.astro';
 import CtaButton from '../../components/CtaButton.astro';
 import AxisLinks from '../../components/AxisLinks.astro';
-import SampleMovie from '../../components/SampleMovie.astro';
 import SampleGallery from '../../components/SampleGallery.astro';
 import OpNote from '../../components/OpNote.astro';
 import { loadCatalog } from '../../lib/catalog.ts';
@@ -86,10 +86,6 @@ const rows = [
   { label: 'レビュー', value: reviewOk ? `${work.reviewAvg!.toFixed(2)}点・${work.reviewCount}件` : '' },
 ].filter((r) => r.value !== '');
 
-// サンプル動画の枠を出すか（SampleMovie.astro と同じ条件: https の埋め込み URL が1つ以上ある）。枠の上の主画像は imageLarge、無ければ imageSmall
-const hasMovie = Object.values(work.sampleMovie?.sizes ?? {}).some((u) => typeof u === 'string' && /^https:\/\//.test(u));
-const poster = work.imageLarge || work.imageSmall || work.imageList || null;
-
 const price = yen(work.priceMin);
 const onSale = work.derivedLabels.includes('セール中') && work.listPrice !== null && work.priceMin !== null && work.listPrice > work.priceMin;
 const off = onSale ? discountRate(work.priceMin, work.listPrice) : null;
@@ -149,7 +145,7 @@ const STICKY_SCRIPT = `(function () {
     <Breadcrumb items={crumbs} />
 
     <article class="stack">
-      <div class:list={['work-main', { 'has-movie': hasMovie }]}>
+      <div class="work-main">
         <header class="work-head">
           <h1>{work.title}</h1>
           {castLine && <p class="cast">出演　{castLine}</p>}
@@ -165,14 +161,6 @@ const STICKY_SCRIPT = `(function () {
         <div class="work-cover">
           {cover && <img src={cover} alt={`${work.title}のパッケージ画像`} width={coverSize.w} height={coverSize.h} decoding="async" fetchpriority="high" />}
         </div>
-
-        {
-          hasMovie && (
-            <div class="work-movie">
-              <SampleMovie movie={work.sampleMovie} title={work.title} heading="サンプル動画" poster={poster} posterAlt={`${work.title}の主画像`} />
-            </div>
-          )
-        }
 
         {
           (price || hasLink) && (
@@ -313,7 +301,7 @@ const STICKY_SCRIPT = `(function () {
   /* is:global にする理由: scoped だと全要素に属性が付き、数千ページ分のHTMLが膨らむ。クラス名は .work- で始めて衝突を避ける */
   .work-page .crumb, .work-head { overflow-wrap: anywhere; }
   .work-page .section-head h2 { flex: none; font-size: 18px; }
-  .work-main { display: grid; gap: calc(var(--sp) * 2.5); grid-template-areas: "head" "cover" "movie" "buy" "gallery" "text" "spec"; }
+  .work-main { display: grid; gap: calc(var(--sp) * 2.5); grid-template-areas: "head" "cover" "buy" "gallery" "text" "spec"; }
   .work-main > * { min-width: 0; }
   .work-head { grid-area: head; margin: 0; }
   /* 題名は折り返す（長い英数字でも横にはみ出さない） */
@@ -323,7 +311,6 @@ const STICKY_SCRIPT = `(function () {
   /* 横長のジャケットを比率どおりに表示する（切り取らない。width/height 属性で読み込み前の高さを確保） */
   .work-cover img { width: 100%; height: auto; }
   .work-buy { grid-area: buy; }
-  .work-movie { grid-area: movie; }
   .work-gallery { grid-area: gallery; }
   .work-text { grid-area: text; display: grid; gap: 6px; }
   .work-text .op-note { margin-bottom: calc(var(--sp) * 1.5); }
@@ -343,12 +330,6 @@ const STICKY_SCRIPT = `(function () {
       column-gap: calc(var(--sp) * 5);
       align-items: start;
     }
-    /* 動画がある作品は、左列の主画像の下に動画を置く（右列の CTA の下に置くと、自動文と仕様表が下に押し下げられるため） */
-    .work-main.has-movie {
-      grid-template-rows: auto auto 1fr auto auto 1fr auto;
-      grid-template-areas: "cover head" "cover buy" "cover ." "movie text" "movie spec" "movie ." "gallery gallery";
-    }
-    .work-movie { align-self: start; }
   }
   .work-bottom { max-width: 520px; }
   /* PC では似た作品の棚が 1 段（高さ 400px ほど）なので、画像の末尾の CTA と末尾の CTA が同じ画面に入る。画像の末尾を優先して末尾の CTA は出さない。

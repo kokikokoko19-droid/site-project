@@ -94,7 +94,7 @@ export type WorkCardRecord = {
   rb: number | null;      // 評価の表示用（レビュー 5 件以上のときだけ 0.5 刻み。未満は null）
   pb: PriceBand | null;   // 価格帯（価格なしは null）
   sale: boolean;          // セール中
-  sm: boolean;            // サンプル動画あり
+  sm: boolean;            // サンプル動画あり。UI では使っていない（2026-11-28 に動画の表示を廃止）。互換のため残す
   lb: DerivedLabel[];     // 派生ラベル
   img: string | null;     // カード画像（imageSmall）
   ob: boolean;            // 外部リンク先（アフィリエイトURLか公式URL）があるか。/go/ の有無と一致

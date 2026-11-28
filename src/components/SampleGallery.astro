@@ -1,6 +1,6 @@
 ---
 // サンプル画像（公式配信の直リンク）。大きい版（…/{cid}jp-N.jpg）を本文の幅に大きく縦に並べる（運営者の決定。ベンチマーク先の構造）。
-// スマホ（640px 未満）は 1 列で本文の幅いっぱい、PC は 2 列。枠は 4:3 で、画像は切り取らず枠の中に全体を収める（object-fit: contain。規約により加工は拡大縮小のみ）。
+// スマホも PC も 1 列。幅は WorkBlock（出演者ページの 10 選・特集のブロック）と同じ最大 760px・左寄せ。枠は 4:3 で、画像は切り取らず枠の中に全体を収める（object-fit: contain。規約により加工は拡大縮小のみ）。
 // 枠の比率を CSS で固定するので、画像が読み込まれる前後で高さが変わらない（レイアウトシフトを出さない）。
 // 大きい版が読めないときは onerror で小さい版（…/{cid}-N.jpg）に差し替える（1回だけ）。srcset は使わない（常に大きい版を出すため）。
 // 最初の LAZY_FROM 枚は通常の読み込み、残りは loading="lazy"。枚数の上限は設けない。
@@ -59,14 +59,13 @@ const FALLBACK = 'this.onerror=null;if(this.dataset.small)this.src=this.dataset.
 <style is:global>
   /* is:global にする理由: scoped だと全要素に属性が付き、数千ページ分のHTMLが膨らむ。
      .gallery はこの部品でしか使わないので、.gallery-wrap / .gallery の配下だけに効く書き方にする */
-  .gallery-wrap { display: grid; gap: calc(var(--sp) * 2); }
-  /* common.css に古い .gallery（3〜5 列の小さな枠）の指定が残っているので、.gallery-wrap > .gallery で詳細度を上げて上書きする */
+  /* 幅は WorkBlock（.work-block）と同じ最大 760px・左寄せ（margin は付けない）。PC でも 1 列で大きく見せる（運営者指示 2026-11-28） */
+  .gallery-wrap { display: grid; gap: calc(var(--sp) * 2); max-width: 760px; }
+  /* common.css に古い .gallery（3〜5 列の小さな枠）の指定が残っているので、.gallery-wrap > .gallery で詳細度を上げて上書きする。幅にかかわらず常に 1 列 */
   .gallery-wrap > .gallery { display: grid; gap: calc(var(--sp) * 1.5); grid-template-columns: minmax(0, 1fr); }
-  @media (min-width: 640px) { .gallery-wrap > .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   /* 枠は 4:3 で固定（CSS の aspect-ratio が画像本来の比率より優先されるので、読み込みの前後で高さが変わらない） */
   .gallery > img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; background: var(--bg2); border-radius: 2px; }
-  /* 途中の CTA。PC では 3 枚目の右の空いたマスに縦中央で置く（行を 1 つ使わず、文書の順と見た目の順も揃う） */
-  .gallery > .cta-box { align-self: center; }
-  /* common.css の .gallery div（4:3 の枠）が CTA の箱にも掛かるので、.cta-box 本来の見た目に戻す */
+  /* 途中の CTA は 1 列の中に 1 行として入る（3 枚目と 4 枚目の間。文書の順と見た目の順は同じ）。
+     common.css の .gallery div（4:3 の枠）が CTA の箱にも掛かるので、.cta-box 本来の見た目に戻す */
   .gallery > .cta-box { aspect-ratio: auto; display: grid; align-items: normal; justify-content: normal; background: var(--bg1); box-shadow: none; border-radius: 3px; color: inherit; font-size: inherit; }
 </style>
