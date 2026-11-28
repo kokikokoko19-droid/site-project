@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { COPY_LIMITS, cleanText, loadCopy, paragraphs, rejectReason, toMaps, validateCopy } from '../src/lib/copy.ts';
+import { COPY_LIMITS, OPERATOR_BANNED_KEYS, cleanText, defaultBannedWords, loadCopy, paragraphs, rejectReason, toMaps, validateCopy } from '../src/lib/copy.ts';
 
 const BANNED = ['禁止語サンプル', 'NGワード'];
 const v = (items: unknown[], known?: Parameters<typeof validateCopy>[1]['known']) => validateCopy({ items }, { bannedWords: BANNED, known });
@@ -152,5 +152,17 @@ describe('loadCopy', () => {
     writeFileSync(file, '{}');
     assert.equal(loadCopy({ path: file, known }), m);
     assert.equal(loadCopy({ path: file, known, force: true }).work.size, 0); // 壊れた形は空（警告だけ）
+  });
+});
+
+describe('defaultBannedWords', () => {
+  it('運営者の文に掛けるのは「未成年を連想させる語」と「運営者が追記する語」だけで、「明らかに性的な語」は掛けない', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'banned-'));
+    const file = join(dir, 'banned-words.json');
+    writeFileSync(file, JSON.stringify({ _説明: 'x', '未成年を連想させる語': ['未成年語A'], '明らかに性的な語': ['性的語B'], '運営者が追記する語': ['追記語C'] }));
+    const words = defaultBannedWords(file);
+    assert.deepEqual([...words].sort(), ['未成年語A', '追記語C']);
+    assert.deepEqual([...OPERATOR_BANNED_KEYS], ['未成年を連想させる語', '運営者が追記する語']);
+    assert.deepEqual(defaultBannedWords(join(dir, 'none.json')), []);
   });
 });

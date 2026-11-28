@@ -8,7 +8,6 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { loadBannedWords } from './ai-text.ts';
 import { loadCatalog } from './catalog.ts';
 
 export type CopyKind = 'work' | 'actress';
@@ -121,9 +120,21 @@ export function copyPath(path?: string): string {
   return resolve(process.cwd(), path || join(process.env.DATA_DIR || 'data', 'copy.json'));
 }
 
-/** config/banned-words.json（cwd 基準） */
-export function defaultBannedWords(): string[] {
-  return loadBannedWords(resolve(process.cwd(), 'config/banned-words.json'));
+/** 運営者の文に掛ける禁止語の区分。AI の文と違い、運営者の文は性的な表現を含みうる前提なので「明らかに性的な語」は掛けない。
+ *  掛けるのは、未成年を連想させる語（法律の線）と、運営者が自分で足した語だけ（運営者決定 2026-11-28） */
+export const OPERATOR_BANNED_KEYS = ['未成年を連想させる語', '運営者が追記する語'] as const;
+
+/** config/banned-words.json（cwd 基準）のうち OPERATOR_BANNED_KEYS の区分だけを集める。読めなければ空 */
+export function defaultBannedWords(path = resolve(process.cwd(), 'config/banned-words.json')): string[] {
+  let json: Record<string, unknown>;
+  try { json = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>; } catch { return []; }
+  const out: string[] = [];
+  for (const key of OPERATOR_BANNED_KEYS) {
+    const v = json[key];
+    if (!Array.isArray(v)) continue;
+    for (const w of v) if (typeof w === 'string' && w.trim() !== '') out.push(w.trim());
+  }
+  return out;
 }
 
 /** カタログ（data/export）にある作品と出演者で id を判定する。カタログが読めなければ判定しない */
