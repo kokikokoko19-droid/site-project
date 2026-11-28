@@ -86,7 +86,7 @@ function syncControls() {
   $$('#purpose [data-preset]').forEach((b) => mark(b, presetActive(st, b.dataset.preset)));
   for (const k of ['act', 'ser', 'mak']) pickers[k].setValue(st[k]);
   { const s = $('#f-year'); ensureOption(s, st.year); s.value = st.year; }
-  for (const k of ['sale', 'sample', 'rev']) $('#f-' + k).checked = st[k];
+  for (const k of ['sale', 'rev']) $('#f-' + k).checked = st[k];
   const q = $('#f-q');
   if (document.activeElement !== q) q.value = st.q;
   $$('.n-filter').forEach((e) => { e.textContent = String(filterCount(st)); });
@@ -137,7 +137,7 @@ const RELAX = [
   [(s) => s.lab.length, 'ラベルを外す', (s) => { s.lab = []; }],
   [(s) => s.act || s.ser || s.mak, '出演者・シリーズ・メーカーを外す', (s) => { s.act = s.ser = s.mak = ''; }],
   [(s) => s.pb.length || s.len || s.year || s.days, '価格・長さ・期間を外す', (s) => { s.pb = []; s.len = s.year = s.days = ''; }],
-  [(s) => s.sale || s.sample || s.rev, '条件を外す', (s) => { s.sale = s.sample = s.rev = false; }],
+  [(s) => s.sale || s.rev, '条件を外す', (s) => { s.sale = s.rev = false; }],
   [(s) => s.q, '検索語を消す', (s) => { s.q = ''; }],
 ];
 function renderEmpty() {
@@ -296,7 +296,7 @@ on('#panel', 'click', (e) => {
 });
 on('#panel', 'change', (e) => { // 入力部品の id（f-xxx）が、そのまま状態のキー
   const t = e.target, k = t.id.startsWith('f-') ? t.id.slice(2) : '';
-  if (!['year', 'sale', 'sample', 'rev'].includes(k)) return;
+  if (!['year', 'sale', 'rev'].includes(k)) return;
   st[k] = t.type === 'checkbox' ? t.checked : t.value;
   sync();
 });

@@ -23,7 +23,7 @@ const IX = nameIndex(NAMES);
 const go = (search: string) => ids(run(WORKS(), readURL(search), IX, NOW));
 
 test('readURL / toQuery: 往復で同じ。既定値は書かず、不正な値は捨てる', () => {
-  const qs = 'sort=rating&g=タグ01&g=タグ02&act=出演者A&pb=0&pb=2&len=l&year=2026&days=30&sale=1&sample=1&rev=1&lab=長尺&q=作品';
+  const qs = 'sort=rating&g=タグ01&g=タグ02&act=出演者A&pb=0&pb=2&len=l&year=2026&days=30&sale=1&rev=1&lab=長尺&q=作品';
   assert.equal(decodeURIComponent(toQuery(readURL('?' + qs)).replace(/\+/g, ' ')), qs);
   assert.equal(toQuery(readURL('')), '');
   assert.deepEqual(readURL('?sort=xx&pb=9&len=zz&year=20&days=-3'), defaults());
@@ -32,6 +32,7 @@ test('readURL / toQuery: 往復で同じ。既定値は書かず、不正な値�
 test('readURL: 旧 URL との互換（sort=new、重みは読み捨て、価格と長さの範囲はチップに読み替え）', () => {
   assert.equal(readURL('?sort=new').sort, 'new');
   assert.deepEqual(readURL('?w_e=1&w_r=0&len=long'), defaults());
+  assert.deepEqual(readURL('?sample=1'), defaults()); // 「サンプル動画あり」は 2026-11-28 に廃止。古いリンクの sample=1 は読み捨てる
   assert.deepEqual(readURL('?pmax=1000').pb, [0, 1]);
   assert.deepEqual(readURL('?pmin=1500').pb, [2, 3]);
   assert.equal(readURL('?vmin=120').len, 'l');
@@ -67,7 +68,8 @@ test('run: 絞り込み（ジャンル AND、出演者・シリーズ・メー�
   assert.deepEqual(go('?len=xl'), ['w3']);
   assert.deepEqual(go('?days=30'), ['w1', 'w4']);
   assert.deepEqual(go('?rev=1'), ['w2', 'w1', 'w4']);
-  assert.deepEqual(go('?sale=1&sample=1'), []);
+  assert.deepEqual(go('?sale=1'), ['w1', 'w4']);
+  assert.deepEqual(go('?sale=1&sample=1'), ['w1', 'w4']); // 廃止した sample=1 は無視される（sm: false の w1 も残る）
   assert.deepEqual(go('?lab=長尺'), ['w2']);
   assert.deepEqual(go('?year=2026'), ['w2', 'w1', 'w4']);
   assert.deepEqual(go('?q=メーカーＡ'), ['w3', 'w1']); // 全角も正規化してメーカー名に当たる

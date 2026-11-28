@@ -102,6 +102,7 @@ export function toCardRecord(work: Work, labels: DerivedLabel[], names: Record<N
     rb: ratingBand(work),
     pb: priceBand(work.priceMin),
     sale: labels.includes('セール中'),
+    // UI では使っていない（2026-11-28 に動画の表示を廃止）。互換のため残す
     sm: work.sampleMovie !== null,
     lb: [...labels],
     img: work.imageSmall,

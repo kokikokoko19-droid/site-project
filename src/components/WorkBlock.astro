@@ -1,6 +1,7 @@
 ---
 // 作品のブロック（「○○のおすすめ作品 10 選」型の記事の 1 作品分）。出演者ページの「おすすめ作品 N 選」と特集ページで使う。
-// 上から: 順位と題名 → 表紙 → データの 1 行 → 公式サンプル画像（先頭 3 枚）→ 一言 → 「FANZAで見る」。
+// 上から: 順位と題名 → 表紙 → データの 1 行 → 公式サンプル画像（先頭 5 枚。運営者指示 2026-11-28「写真を大きく、多く」で 3 枚から増やした）→ 一言 → 「FANZAで見る」。
+// ボタンに「PR」の小文字は付けない（運営者決定 2026-11-28）。広告表記は全ページ上部の帯（layouts/Base.astro の .pr-band）で担保する。
 // 画像は公式配信の直リンクをそのまま出す。規約により加工は拡大縮小のみ（切り取らず object-fit: contain で枠に収める）。
 // 一言は運営者の note（特集の frontmatter、または data/copy.json の作品の文）があればそれ、無ければデータから機械的に作る自動文（summaryText。非露骨）。公式の紹介文・レビュー本文は使わない。
 // 出演者ページは数千ページ生成されるので、属性は必要なものだけにする（1 ページ 10 ブロックで HTML 30KB 以内）。
@@ -15,7 +16,7 @@ interface Props {
   rank?: number;
   /** 運営者の一言。あれば自動文の代わりに出す */
   note?: string;
-  /** サンプル画像の枚数（先頭から。既定 3） */
+  /** サンプル画像の枚数（先頭から。既定 5） */
   samples?: number;
   /** 計測用の位置（data-cta-pos）。出演者ページは actress-top、特集は feature */
   ctaPos: string;
@@ -25,7 +26,7 @@ interface Props {
   hideActress?: boolean;
 }
 
-const { work, rank, note, samples = 3, ctaPos, eager = false, hideActress = false } = Astro.props;
+const { work, rank, note, samples = 5, ctaPos, eager = false, hideActress = false } = Astro.props;
 const card = toCard(work);
 const href = `/v/${work.contentId}/`;
 // レビューがこの件数以上のときだけ評価を出す（WorkCard の「参考」扱いの境目と同じ）
@@ -81,7 +82,7 @@ const auto = text === '' ? summaryText(work, { price: false }) : '';
   )}
   {text !== '' ? <p class="wb-note">{text}</p> : auto !== '' && <p class="wb-note auto">{auto}</p>}
   {work.outboundUrl && (
-    <p class="wb-cta"><a class="btn btn-cta" href={`/go/${work.contentId}/`} rel="sponsored nofollow" data-cta="block" data-cta-pos={ctaPos}>FANZAで見る <small>PR</small></a></p>
+    <p class="wb-cta"><a class="btn btn-cta" href={`/go/${work.contentId}/`} rel="sponsored nofollow" data-cta="block" data-cta-pos={ctaPos}>FANZAで見る</a></p>
   )}
 </article>
 

@@ -164,7 +164,6 @@ p { margin: 0; }
 .btn:hover { border-color: var(--fg2); background: var(--bg2); }
 .btn-cta { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; letter-spacing: .02em; }
 .btn-cta:hover { background: #e4b150; border-color: #e4b150; }
-.btn-cta small { font-weight: 600; opacity: .8; font-size: 11px; letter-spacing: .1em; }
 .btn-block { width: 100%; }
 /* 作品の FANZA ボタン（CtaButton の横幅いっぱい版。data-cta が目印）。スマホは全幅、PC は最大 480px で中央。高さ 48px 以上で押せると分かる大きさにする。
    琥珀の塗りに琥珀の枠線だと焦点が見えにくいので、焦点の枠は紙の色にする */
@@ -175,7 +174,6 @@ p { margin: 0; }
    年齢確認の「18歳以上です」やぶらぶらの「次の棚へ」など、サイト内の強調ボタンは琥珀のまま（運営者決定 2026-11-28） */
 .btn-cta[data-cta], a.btn-cta[href^="/go/"] { background: var(--cta); color: var(--cta-ink); border-color: var(--cta); }
 .btn-cta[data-cta]:hover, a.btn-cta[href^="/go/"]:hover { background: var(--cta-hover); border-color: var(--cta-hover); }
-.btn-cta[data-cta] small, a.btn-cta[href^="/go/"] small { opacity: .9; }
 
 /* 絞り込みパネル（探索） */
 .explore { display: grid; gap: calc(var(--sp) * 3); }

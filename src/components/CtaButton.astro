@@ -2,7 +2,8 @@
 // 作品ごとの外部リンクボタン（FANZAへの誘導）。
 // リンク先は中継ページ /go/{id}/ で、そこから公式のアフィリエイトURLへ移動する。
 // /go/{id}/ は outboundUrl がある作品にしか作られないので、呼び出し側で outboundUrl の有無を見て出し分けること。
-// 全ページに「PR」表記が必要なため、ボタンの中にも小さく「PR」を添える。
+// ボタンに「PR」の小文字は付けない（運営者決定 2026-11-28）。全ページに必要な広告表記は、上部の帯（layouts/Base.astro の .pr-band
+// 「本サイトはアフィリエイト広告（PR）を含みます」）で担保する。
 interface Props {
   /** 作品ID（content_id） */
   id: string;
@@ -20,4 +21,4 @@ const { id, label = 'FANZAで見る', block = true, pos, class: extra } = Astro.
 ---
 
 {/* data-cta は計測用の目印（public/analytics/events.js が拾う）。広告リンクなので rel は sponsored nofollow */}
-<a class:list={['btn', 'btn-cta', { 'btn-block': block }, extra]} href={`/go/${id}/`} rel="sponsored nofollow" data-cta="work" data-cta-pos={pos}>{label} <small>PR</small></a>
+<a class:list={['btn', 'btn-cta', { 'btn-block': block }, extra]} href={`/go/${id}/`} rel="sponsored nofollow" data-cta="work" data-cta-pos={pos}>{label}</a>
